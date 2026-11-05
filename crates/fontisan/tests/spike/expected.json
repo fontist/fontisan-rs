@@ -1,0 +1,676 @@
+{
+  "reference": "0ea515c4f1c64c426bea188ec694e022f9db2123",
+  "fonts": {
+    "names-mac-and-windows-mixed.ttf": {
+      "cmap": {
+        "count": 5,
+        "sha256": "c91c5ae2111aadb10f7466de96d2adaf0366ac4355d7b69292bb0263ded94d27",
+        "subtable_formats": [
+          4,
+          6
+        ]
+      },
+      "outlines": {
+        "count": 6,
+        "digest": "00fb18acd96feedf03f7ea4fd213d0387da48e8f2e19ed29b60a30215ba0dc83",
+        "kind": "glyf"
+      },
+      "glyf_parsed": {
+        "num_glyphs": 6,
+        "kinds": {
+          "s": 2,
+          "e": 3,
+          "c": 1
+        },
+        "sha256": "24bfe6a4e2c1d2b79e3bd6473e9c6bcc150fc0f8a6e949dd5b88c8e7cfa81141"
+      }
+    },
+    "names-mac-roman-only.ttf": {
+      "cmap": {
+        "count": 5,
+        "sha256": "c91c5ae2111aadb10f7466de96d2adaf0366ac4355d7b69292bb0263ded94d27",
+        "subtable_formats": [
+          4,
+          6
+        ]
+      },
+      "outlines": {
+        "count": 6,
+        "digest": "00fb18acd96feedf03f7ea4fd213d0387da48e8f2e19ed29b60a30215ba0dc83",
+        "kind": "glyf"
+      },
+      "glyf_parsed": {
+        "num_glyphs": 6,
+        "kinds": {
+          "s": 2,
+          "e": 3,
+          "c": 1
+        },
+        "sha256": "24bfe6a4e2c1d2b79e3bd6473e9c6bcc150fc0f8a6e949dd5b88c8e7cfa81141"
+      }
+    },
+    "names-windows-nonascii-only.ttf": {
+      "cmap": {
+        "count": 5,
+        "sha256": "c91c5ae2111aadb10f7466de96d2adaf0366ac4355d7b69292bb0263ded94d27",
+        "subtable_formats": [
+          4,
+          6
+        ]
+      },
+      "outlines": {
+        "count": 6,
+        "digest": "00fb18acd96feedf03f7ea4fd213d0387da48e8f2e19ed29b60a30215ba0dc83",
+        "kind": "glyf"
+      },
+      "glyf_parsed": {
+        "num_glyphs": 6,
+        "kinds": {
+          "s": 2,
+          "e": 3,
+          "c": 1
+        },
+        "sha256": "24bfe6a4e2c1d2b79e3bd6473e9c6bcc150fc0f8a6e949dd5b88c8e7cfa81141"
+      }
+    },
+    "quirk-empty-cmap-table.ttf": {
+      "cmap": {
+        "count": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "subtable_formats": []
+      },
+      "outlines": {
+        "count": 6,
+        "digest": "00fb18acd96feedf03f7ea4fd213d0387da48e8f2e19ed29b60a30215ba0dc83",
+        "kind": "glyf"
+      },
+      "glyf_parsed": {
+        "num_glyphs": 6,
+        "kinds": {
+          "s": 2,
+          "e": 3,
+          "c": 1
+        },
+        "sha256": "24bfe6a4e2c1d2b79e3bd6473e9c6bcc150fc0f8a6e949dd5b88c8e7cfa81141"
+      }
+    },
+    "quirk-empty-name-table.ttf": {
+      "cmap": {
+        "count": 5,
+        "sha256": "c91c5ae2111aadb10f7466de96d2adaf0366ac4355d7b69292bb0263ded94d27",
+        "subtable_formats": [
+          4,
+          6
+        ]
+      },
+      "outlines": {
+        "count": 6,
+        "digest": "00fb18acd96feedf03f7ea4fd213d0387da48e8f2e19ed29b60a30215ba0dc83",
+        "kind": "glyf"
+      },
+      "glyf_parsed": {
+        "num_glyphs": 6,
+        "kinds": {
+          "s": 2,
+          "e": 3,
+          "c": 1
+        },
+        "sha256": "24bfe6a4e2c1d2b79e3bd6473e9c6bcc150fc0f8a6e949dd5b88c8e7cfa81141"
+      }
+    },
+    "quirk-empty-optional-tables.ttf": {
+      "cmap": {
+        "count": 5,
+        "sha256": "c91c5ae2111aadb10f7466de96d2adaf0366ac4355d7b69292bb0263ded94d27",
+        "subtable_formats": [
+          4,
+          6
+        ]
+      },
+      "outlines": {
+        "count": 6,
+        "digest": "00fb18acd96feedf03f7ea4fd213d0387da48e8f2e19ed29b60a30215ba0dc83",
+        "kind": "glyf"
+      },
+      "glyf_parsed": {
+        "num_glyphs": 6,
+        "kinds": {
+          "s": 2,
+          "e": 3,
+          "c": 1
+        },
+        "sha256": "24bfe6a4e2c1d2b79e3bd6473e9c6bcc150fc0f8a6e949dd5b88c8e7cfa81141"
+      }
+    },
+    "quirk-head-version-2.ttf": {
+      "cmap": {
+        "count": 5,
+        "sha256": "c91c5ae2111aadb10f7466de96d2adaf0366ac4355d7b69292bb0263ded94d27",
+        "subtable_formats": [
+          4,
+          6
+        ]
+      },
+      "outlines": {
+        "count": 6,
+        "digest": "00fb18acd96feedf03f7ea4fd213d0387da48e8f2e19ed29b60a30215ba0dc83",
+        "kind": "glyf"
+      },
+      "glyf_parsed": {
+        "num_glyphs": 6,
+        "kinds": {
+          "s": 2,
+          "e": 3,
+          "c": 1
+        },
+        "sha256": "24bfe6a4e2c1d2b79e3bd6473e9c6bcc150fc0f8a6e949dd5b88c8e7cfa81141"
+      }
+    },
+    "quirk-name-format-1.ttf": {
+      "cmap": {
+        "count": 5,
+        "sha256": "c91c5ae2111aadb10f7466de96d2adaf0366ac4355d7b69292bb0263ded94d27",
+        "subtable_formats": [
+          4,
+          6
+        ]
+      },
+      "outlines": {
+        "count": 6,
+        "digest": "00fb18acd96feedf03f7ea4fd213d0387da48e8f2e19ed29b60a30215ba0dc83",
+        "kind": "glyf"
+      },
+      "glyf_parsed": {
+        "num_glyphs": 6,
+        "kinds": {
+          "s": 2,
+          "e": 3,
+          "c": 1
+        },
+        "sha256": "24bfe6a4e2c1d2b79e3bd6473e9c6bcc150fc0f8a6e949dd5b88c8e7cfa81141"
+      }
+    },
+    "quirk-os2-version-0.ttf": {
+      "cmap": {
+        "count": 5,
+        "sha256": "c91c5ae2111aadb10f7466de96d2adaf0366ac4355d7b69292bb0263ded94d27",
+        "subtable_formats": [
+          4,
+          6
+        ]
+      },
+      "outlines": {
+        "count": 6,
+        "digest": "00fb18acd96feedf03f7ea4fd213d0387da48e8f2e19ed29b60a30215ba0dc83",
+        "kind": "glyf"
+      },
+      "glyf_parsed": {
+        "num_glyphs": 6,
+        "kinds": {
+          "s": 2,
+          "e": 3,
+          "c": 1
+        },
+        "sha256": "24bfe6a4e2c1d2b79e3bd6473e9c6bcc150fc0f8a6e949dd5b88c8e7cfa81141"
+      }
+    },
+    "quirk-sfnt-version-otto-on-glyf.ttf": {
+      "cmap": {
+        "count": 5,
+        "sha256": "c91c5ae2111aadb10f7466de96d2adaf0366ac4355d7b69292bb0263ded94d27",
+        "subtable_formats": [
+          4,
+          6
+        ]
+      },
+      "outlines": {
+        "count": 6,
+        "digest": "00fb18acd96feedf03f7ea4fd213d0387da48e8f2e19ed29b60a30215ba0dc83",
+        "kind": "glyf"
+      },
+      "glyf_parsed": {
+        "num_glyphs": 6,
+        "kinds": {
+          "s": 2,
+          "e": 3,
+          "c": 1
+        },
+        "sha256": "24bfe6a4e2c1d2b79e3bd6473e9c6bcc150fc0f8a6e949dd5b88c8e7cfa81141"
+      }
+    },
+    "quirk-sfnt-version-true.ttf": {
+      "cmap": {
+        "count": 5,
+        "sha256": "c91c5ae2111aadb10f7466de96d2adaf0366ac4355d7b69292bb0263ded94d27",
+        "subtable_formats": [
+          4,
+          6
+        ]
+      },
+      "outlines": {
+        "count": 6,
+        "digest": "00fb18acd96feedf03f7ea4fd213d0387da48e8f2e19ed29b60a30215ba0dc83",
+        "kind": "glyf"
+      },
+      "glyf_parsed": {
+        "num_glyphs": 6,
+        "kinds": {
+          "s": 2,
+          "e": 3,
+          "c": 1
+        },
+        "sha256": "24bfe6a4e2c1d2b79e3bd6473e9c6bcc150fc0f8a6e949dd5b88c8e7cfa81141"
+      }
+    },
+    "MonaSansVF[wdth,wght,opsz,ital].ttf": {
+      "cmap": {
+        "count": 568,
+        "sha256": "d0b733555a23b7c0b9dc3ccad88d52174c4041657ae9c13e6ab5d86448efb12a",
+        "subtable_formats": [
+          4
+        ]
+      },
+      "outlines": {
+        "count": 797,
+        "digest": "0c0cfcbbe5bdcff8a0885d74e7cc12f752ad6ebf8de0725b7578f1a6a8f4b74b",
+        "kind": "glyf"
+      },
+      "glyf_parsed": {
+        "num_glyphs": 797,
+        "kinds": {
+          "s": 283,
+          "e": 2,
+          "c": 512
+        },
+        "sha256": "8ae82f70b7a7ac5e42ebe5796a84246b3099c7ebca68d69947601177d15953a8"
+      },
+      "gvar": {
+        "version": [
+          1,
+          0
+        ],
+        "axis_count": 4,
+        "shared_tuple_count": 47,
+        "glyph_count": 797,
+        "flags": 1,
+        "shared_tuples_sha256": "3626ab699bcc934c52450e18ebb244dee130d690a5fbe4b5182903d0d9e8cc76",
+        "glyphs_with_data": 797,
+        "glyphs_sha256": "e2f63cb5b6ef2c374cf0bac616972e38494c21b26e2b86fd4dff7a714e076a5b"
+      }
+    },
+    "NotoSans-Regular.ttf": {
+      "cmap": {
+        "count": 2965,
+        "sha256": "de201e98ce7d09038f23dd40e98ec7853bf47ea5be9ae0baa12c54806244d141",
+        "subtable_formats": [
+          4,
+          12
+        ]
+      },
+      "outlines": {
+        "count": 3884,
+        "digest": "cfd2ff602a46adac806346c945a50623f37314fa44361d535c90f03bb98f20e8",
+        "kind": "glyf"
+      },
+      "glyf_parsed": {
+        "num_glyphs": 3884,
+        "kinds": {
+          "s": 2229,
+          "e": 34,
+          "c": 1621
+        },
+        "sha256": "c52df11a0cf314d019b2fcdecb1726e1fa218308460fbfd320ea1cceb0d12600"
+      }
+    },
+    "NotoSansJP-Regular.otf": {
+      "cmap": {
+        "count": 16732,
+        "sha256": "fd03a1c2657a16dff376964c0b8ef26321206b861422f76ef52eafbb286e5c21",
+        "subtable_formats": [
+          4,
+          6,
+          12,
+          14
+        ]
+      },
+      "outlines": {
+        "count": 17936,
+        "digest": "0a017a418ed5fa50c49fb8878cdd3e359c8263b6facbc1be16f53ce537605a32",
+        "kind": "cff"
+      }
+    },
+    "NotoSans[wdth,wght].ttf": {
+      "cmap": {
+        "count": 2965,
+        "sha256": "de201e98ce7d09038f23dd40e98ec7853bf47ea5be9ae0baa12c54806244d141",
+        "subtable_formats": [
+          4,
+          12
+        ]
+      },
+      "outlines": {
+        "count": 3884,
+        "digest": "cb32668dedc3aed316e63e0423d11e0d5419bdf3edd59cd3ae723c3c299b6216",
+        "kind": "glyf"
+      },
+      "glyf_parsed": {
+        "num_glyphs": 3884,
+        "kinds": {
+          "s": 2243,
+          "e": 34,
+          "c": 1607
+        },
+        "sha256": "257dd41d68d2e8831709f86094c355186790fb2295ce8684624ca5876d13ec80"
+      },
+      "gvar": {
+        "version": [
+          1,
+          0
+        ],
+        "axis_count": 2,
+        "shared_tuple_count": 7,
+        "glyph_count": 3884,
+        "flags": 1,
+        "shared_tuples_sha256": "2cbeb761b65b75a016d72df4d88d6dfbdeb4021271806d522af16401fc1bf91b",
+        "glyphs_with_data": 3642,
+        "glyphs_sha256": "eff19cb2d2a00ebe7589ee60d529969f489a26ca941ae87207cbba85219c681c"
+      }
+    },
+    "NotoSerifTangut-Regular.ttf": {
+      "cmap": {
+        "count": 6920,
+        "sha256": "b032fc09867106079c4ca68f6e52187e743c821c4ec65a60a7b8f1b4fc987e41",
+        "subtable_formats": [
+          4,
+          12
+        ]
+      },
+      "outlines": {
+        "count": 6923,
+        "digest": "d2c2e41ba7325adfa77d59c1663e9e7d8fddb4eec68193523963790732a4ff28",
+        "kind": "glyf"
+      },
+      "glyf_parsed": {
+        "num_glyphs": 6923,
+        "kinds": {
+          "s": 6917,
+          "e": 6
+        },
+        "sha256": "812c37829ff3f25813b3c7dd16b05f2db23267a4c5ea886d7b798f65fe29b8f4"
+      }
+    },
+    "SourceSans3-Regular.otf": {
+      "cmap": {
+        "count": 1614,
+        "sha256": "4725c6a9b462aee17761c8ea5b6c0b115477f57d933cb2ce165dc556197c7527",
+        "subtable_formats": [
+          4,
+          6,
+          12
+        ]
+      },
+      "outlines": {
+        "count": 2478,
+        "digest": "c02230bcced2ccaa3f716b582a5a1b8ca8d37dfb24fcd7f514bf288137cbe6c2",
+        "kind": "cff"
+      }
+    },
+    "SourceSans3-Regular.ttf": {
+      "cmap": {
+        "count": 1614,
+        "sha256": "4725c6a9b462aee17761c8ea5b6c0b115477f57d933cb2ce165dc556197c7527",
+        "subtable_formats": [
+          4,
+          6,
+          12
+        ]
+      },
+      "outlines": {
+        "count": 2478,
+        "digest": "57f2cbb3fe3b37fd698534eb605ebc60b8462135ba9fd45ae1068b41d80b7bcc",
+        "kind": "glyf"
+      },
+      "glyf_parsed": {
+        "num_glyphs": 2478,
+        "kinds": {
+          "s": 1138,
+          "e": 9,
+          "c": 1331
+        },
+        "sha256": "02f952d58d75fb2e48ddba40a01af98edf99351b01f369dac9e1cd0b3860b1e4"
+      }
+    },
+    "SourceSans3VF-Italic.ttf": {
+      "cmap": {
+        "count": 1615,
+        "sha256": "ae5f0ec6a703aca9a076d7e588d22fd24092920acaf1fcb5a2ea19fc9ae1b46c",
+        "subtable_formats": [
+          4,
+          12
+        ]
+      },
+      "outlines": {
+        "count": 1998,
+        "digest": "f02c48d3051b2cb66c04d830287e33ea0e1aff22140504914955504e07cb779e",
+        "kind": "glyf"
+      },
+      "glyf_parsed": {
+        "num_glyphs": 1998,
+        "kinds": {
+          "s": 933,
+          "e": 9,
+          "c": 1056
+        },
+        "sha256": "a66ff7d7e810e0094b2a71029d4b3dca0cde6140d965ba24e659bce9b8004a8a"
+      },
+      "gvar": {
+        "version": [
+          1,
+          0
+        ],
+        "axis_count": 1,
+        "shared_tuple_count": 2,
+        "glyph_count": 1998,
+        "flags": 0,
+        "shared_tuples_sha256": "4ab7e29278490c43544a7240e2a72fa3fb335eebef542d041cc41674edb4e3b9",
+        "glyphs_with_data": 1990,
+        "glyphs_sha256": "92c15e2b3380d93a9acab11da7a31128b9f95bb5916d4d1237c5090ed16fa6eb"
+      }
+    },
+    "SourceSans3VF-Upright.otf": {
+      "cmap": {
+        "count": 1615,
+        "sha256": "ae5f0ec6a703aca9a076d7e588d22fd24092920acaf1fcb5a2ea19fc9ae1b46c",
+        "subtable_formats": [
+          4,
+          12
+        ]
+      },
+      "outlines": {
+        "count": 0,
+        "digest": null,
+        "kind": null
+      }
+    },
+    "SourceSans3VF-Upright.ttf": {
+      "cmap": {
+        "count": 1615,
+        "sha256": "ae5f0ec6a703aca9a076d7e588d22fd24092920acaf1fcb5a2ea19fc9ae1b46c",
+        "subtable_formats": [
+          4,
+          12
+        ]
+      },
+      "outlines": {
+        "count": 2478,
+        "digest": "d8c5c45c1eb7cc2f84264721fcd9f07b0ab7c1f566afa3650ff89279466403a1",
+        "kind": "glyf"
+      },
+      "glyf_parsed": {
+        "num_glyphs": 2478,
+        "kinds": {
+          "s": 1122,
+          "e": 9,
+          "c": 1347
+        },
+        "sha256": "d6ddbd33b8c6b084c50cbba0476b8ce641a2bf227f1e8ac2a121ee2ab9ca885a"
+      },
+      "gvar": {
+        "version": [
+          1,
+          0
+        ],
+        "axis_count": 1,
+        "shared_tuple_count": 2,
+        "glyph_count": 2478,
+        "flags": 0,
+        "shared_tuples_sha256": "4ab7e29278490c43544a7240e2a72fa3fb335eebef542d041cc41674edb4e3b9",
+        "glyphs_with_data": 2471,
+        "glyphs_sha256": "67744f5b76c4094e24a6cfeca9bfb3cd13681b06185f33d8caf552b68f27ce5d"
+      }
+    },
+    "TestOTF.otf": {
+      "cmap": {
+        "count": 5,
+        "sha256": "c91c5ae2111aadb10f7466de96d2adaf0366ac4355d7b69292bb0263ded94d27",
+        "subtable_formats": [
+          4,
+          6
+        ]
+      },
+      "outlines": {
+        "count": 6,
+        "digest": "60ad7ecae696e48edcd4cfc9b7c0e5b197a7317ac7e20a151ea12c219638ae36",
+        "kind": "cff"
+      }
+    },
+    "TestTTF.ttf": {
+      "cmap": {
+        "count": 5,
+        "sha256": "c91c5ae2111aadb10f7466de96d2adaf0366ac4355d7b69292bb0263ded94d27",
+        "subtable_formats": [
+          4,
+          6
+        ]
+      },
+      "outlines": {
+        "count": 6,
+        "digest": "00fb18acd96feedf03f7ea4fd213d0387da48e8f2e19ed29b60a30215ba0dc83",
+        "kind": "glyf"
+      },
+      "glyf_parsed": {
+        "num_glyphs": 6,
+        "kinds": {
+          "s": 2,
+          "e": 3,
+          "c": 1
+        },
+        "sha256": "24bfe6a4e2c1d2b79e3bd6473e9c6bcc150fc0f8a6e949dd5b88c8e7cfa81141"
+      }
+    }
+  },
+  "malformed": {
+    "malformed-bad-checksum.ttf": {
+      "load": "ok",
+      "data": {
+        "DSIG": 8,
+        "OS/2": 96,
+        "cmap": 506,
+        "cvt ": 2,
+        "fpgm": 1,
+        "gasp": 12,
+        "glyf": 104,
+        "head": 54,
+        "hhea": 36,
+        "hmtx": 24,
+        "loca": 14,
+        "maxp": 32,
+        "name": 1122,
+        "post": 55,
+        "prep": 1
+      },
+      "parse": {
+        "head": "ok",
+        "hhea": "ok",
+        "maxp": "ok",
+        "OS/2": "ok",
+        "post": "ok",
+        "cmap": "ok",
+        "name": "ok"
+      }
+    },
+    "malformed-bad-num-tables.ttf": {
+      "load": "RuntimeError"
+    },
+    "malformed-bad-table-offset.ttf": {
+      "load": "ok",
+      "data": {
+        "DSIG": null,
+        "OS/2": 96,
+        "cmap": 506,
+        "cvt ": 2,
+        "fpgm": 1,
+        "gasp": 12,
+        "glyf": 104,
+        "head": 54,
+        "hhea": 36,
+        "hmtx": 24,
+        "loca": 14,
+        "maxp": 32,
+        "name": 1122,
+        "post": 55,
+        "prep": 1
+      },
+      "parse": {
+        "head": "ok",
+        "hhea": "ok",
+        "maxp": "ok",
+        "OS/2": "ok",
+        "post": "ok",
+        "cmap": "ok",
+        "name": "ok"
+      }
+    },
+    "malformed-empty.ttf": {
+      "load": "Fontisan::InvalidFontError"
+    },
+    "malformed-garbage.ttf": {
+      "load": "Fontisan::InvalidFontError"
+    },
+    "malformed-truncated-10.ttf": {
+      "load": "RuntimeError"
+    },
+    "malformed-truncated-100.ttf": {
+      "load": "RuntimeError"
+    },
+    "malformed-truncated-half.ttf": {
+      "load": "ok",
+      "data": {
+        "DSIG": null,
+        "OS/2": 96,
+        "cmap": 506,
+        "cvt ": 2,
+        "fpgm": 1,
+        "gasp": null,
+        "glyf": 104,
+        "head": 54,
+        "hhea": 36,
+        "hmtx": 24,
+        "loca": 14,
+        "maxp": 32,
+        "name": 32,
+        "post": null,
+        "prep": 1
+      },
+      "parse": {
+        "head": "ok",
+        "hhea": "ok",
+        "maxp": "ok",
+        "OS/2": "ok",
+        "post": "ok",
+        "cmap": "ok",
+        "name": "EOFError"
+      }
+    }
+  }
+}
