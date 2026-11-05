@@ -20,10 +20,18 @@ enum {
   FONTISAN_E_BAD_STRUCT_SIZE = 4,
   FONTISAN_E_UNKNOWN_OP = 5,
   FONTISAN_E_PANIC = 6,
-  FONTISAN_E_INVALID_ARG = 7
+  FONTISAN_E_INVALID_ARG = 7,
+  FONTISAN_E_CONVERT_FAILED = 8
 };
 
 #define FONTISAN_OP_ECHO 0u
+/* input = 16-byte prefix (u32 BE target 0 ttf/1 otf/2 woff/3 woff2, u32 reserved,
+ * i64 BE timestamp) + font bytes; payload = converted font. Failure message is
+ * "<ruby class>: <message>" with status FONTISAN_E_CONVERT_FAILED. */
+#define FONTISAN_OP_CONVERT 1u
+/* input = 16-byte prefix (u32 BE member index, 12 reserved) + collection;
+ * payload = u32 BE basename length, basename, member bytes. */
+#define FONTISAN_OP_EXTRACT 2u
 
 typedef struct {
   uint32_t magic;

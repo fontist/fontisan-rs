@@ -63,7 +63,19 @@ pub fn decode_woff2(data: &[u8]) -> Result<Vec<u8>> {
     if is_woff2_collection(data) {
         return err("WOFF2 collection: use decode_woff2_collection");
     }
-    convert(data)
+    convert(data, false)
+}
+
+/// Like [`decode_woff2`], but pads `glyf` glyphs the way the Ruby reference
+/// (`Woff2::GlyfLocaReconstruct`) does: to 2 bytes with a short `loca`, not at
+/// all with a long one (`woff2_decompress` always pads to 4), and derives the
+/// `head` checkSumAdjustment from the stored one. The convert
+/// goldens are built on that layout (card 1h-writer).
+pub fn decode_woff2_ruby_padding(data: &[u8]) -> Result<Vec<u8>> {
+    if is_woff2_collection(data) {
+        return err("WOFF2 collection: use decode_woff2_collection");
+    }
+    convert(data, true)
 }
 
 /// Decode a WOFF2 collection to `ttcf` bytes (shared tables stored once).
@@ -71,7 +83,7 @@ pub fn decode_woff2_collection(data: &[u8]) -> Result<Vec<u8>> {
     if !is_woff2_collection(data) {
         return err("not a WOFF2 collection");
     }
-    convert(data)
+    convert(data, false)
 }
 
 fn read_base128(r: &mut Reader) -> Result<u32> {
@@ -428,6 +440,7 @@ fn reconstruct_glyf(
     loca_dst_length: u32,
     info: &mut FontInfo,
     out: &mut Vec<u8>,
+    ruby_padding: bool,
 ) -> Result<GlyfOut> {
     let glyf_start = out.len();
     let mut file = Reader::new(data);
@@ -557,7 +570,15 @@ fn reconstruct_glyf(
         }
         loca_values[i] = (out.len() - glyf_start) as u32;
         out.extend_from_slice(&glyph);
-        out.resize(round4(out.len() as u64) as usize, 0);
+        let align = match (ruby_padding, info.index_format) {
+            (false, _) => 4,
+            (true, 0) => 2,
+            (true, _) => 1,
+        };
+        out.resize(
+            (out.len() - glyf_start).next_multiple_of(align) + glyf_start,
+            0,
+        );
         glyf_checksum = glyf_checksum.wrapping_add(checksum(&glyph));
         if n_contours > 0 {
             info.x_mins[i] = i16::from_be_bytes([glyph[2], glyph[3]]);
@@ -627,7 +648,8 @@ fn reconstruct_hmtx(data: &[u8], info: &FontInfo, out: &mut Vec<u8>) -> Result<u
     Ok(checksum(&table))
 }
 
-fn convert(data: &[u8]) -> Result<Vec<u8>> {
+fn convert(data: &[u8], ruby_padding: bool) -> Result<Vec<u8>> {
+    let mut head_src_adjustment = 0u32;
     let mut hdr = read_header(data)?;
     let collection = hdr.header_version != 0;
     let nfonts = if collection { hdr.fonts.len() } else { 1 };
@@ -777,6 +799,9 @@ fn convert(data: &[u8]) -> Result<Vec<u8>> {
                         if src_len < 12 {
                             return err("head table too short");
                         }
+                        head_src_adjustment = u32::from_be_bytes(
+                            buf[src_off + 8..src_off + 12].try_into().expect("4 bytes"),
+                        );
                         buf[src_off + 8..src_off + 12].fill(0);
                     }
                     hdr.tables[ti].dst_offset = out.len() as u32;
@@ -790,6 +815,7 @@ fn convert(data: &[u8]) -> Result<Vec<u8>> {
                         hdr.tables[li].dst_length,
                         &mut infos[fi],
                         &mut out,
+                        ruby_padding,
                     )?;
                     hdr.tables[ti].dst_length = g.glyf_length;
                     hdr.tables[li].dst_offset = g.loca_offset;
@@ -829,12 +855,48 @@ fn convert(data: &[u8]) -> Result<Vec<u8>> {
             if t.dst_length < 12 {
                 return err("head table too short");
             }
-            let adj = 0xB1B0_AFBAu32.wrapping_sub(font_sum);
+            let at = t.dst_offset as usize + 8;
+            let mut adj = 0xB1B0_AFBAu32.wrapping_sub(font_sum);
+            if ruby_padding {
+                out[at..at + 4].fill(0);
+                adj = ruby_head_adjustment(&out, head_src_adjustment);
+            }
             let at = t.dst_offset as usize + 8;
             out[at..at + 4].copy_from_slice(&adj.to_be_bytes());
         }
     }
     Ok(out)
+}
+
+/// checkSumAdjustment as Ruby's `Woff2Font` computes it: the sfnt re-laid out
+/// with every table in directory order, each directory checksum taken over the
+/// table bytes, the head one over the stored adjustment `stored`.
+fn ruby_head_adjustment(sfnt: &[u8], stored: u32) -> u32 {
+    let n = usize::from(u16::from_be_bytes([sfnt[4], sfnt[5]]));
+    let mut sum = checksum(&sfnt[..12]);
+    let mut offset = 12 + 16 * n as u32;
+    let mut data_sum = 0u32;
+    for i in 0..n {
+        let e = &sfnt[12 + 16 * i..28 + 16 * i];
+        let off = u32::from_be_bytes([e[8], e[9], e[10], e[11]]) as usize;
+        let len = u32::from_be_bytes([e[12], e[13], e[14], e[15]]) as usize;
+        let data = &sfnt[off..off + len];
+        let mut cs = checksum(data);
+        if e[0..4] == *b"head" {
+            cs = cs.wrapping_add(stored);
+        }
+        for w in [
+            u32::from_be_bytes([e[0], e[1], e[2], e[3]]),
+            cs,
+            offset,
+            len as u32,
+        ] {
+            sum = sum.wrapping_add(w);
+        }
+        data_sum = data_sum.wrapping_add(checksum(data));
+        offset += round4(len as u64) as u32;
+    }
+    0xB1B0_AFBAu32.wrapping_sub(sum.wrapping_add(data_sum))
 }
 
 fn find_tag(all: &[Table], idxs: &[usize], tag: u32) -> Option<usize> {

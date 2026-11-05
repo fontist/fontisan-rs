@@ -33,6 +33,8 @@ pub enum FontisanStatus {
     UnknownOp = 5,
     Panic = 6,
     InvalidArgument = 7,
+    /// Conversion or extract failed; the message is `<ruby class>: <message>`.
+    ConvertFailed = 8,
 }
 
 /// Leads every ABI struct.
@@ -89,6 +91,14 @@ impl FontisanHeader {
 
 /// Operations. `Echo` exists to exercise the scaffolding; real ops come in 1g.
 pub const OP_ECHO: u32 = 0;
+/// Convert. `input` = 16-byte prefix (u32 BE target: 0 ttf, 1 otf, 2 woff,
+/// 3 woff2; u32 reserved; i64 BE timestamp) followed by the font bytes.
+/// Payload: the converted font.
+pub const OP_CONVERT: u32 = 1;
+/// Extract a collection member. `input` = 16-byte prefix (u32 BE index; 12
+/// reserved bytes) followed by the collection. Payload: u32 BE basename
+/// length, the basename, then the member's font bytes.
+pub const OP_EXTRACT: u32 = 2;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -167,6 +177,48 @@ unsafe fn dispatch(req: *const FontisanRequest) -> Result<Vec<u8>, FfiError> {
                 return Ok(Vec::new());
             }
             Ok(unsafe { std::slice::from_raw_parts(req.input, req.input_len) }.to_vec())
+        }
+        OP_CONVERT | OP_EXTRACT => {
+            if req.input.is_null() && req.input_len != 0 {
+                return Err(FfiError::new(
+                    FontisanStatus::InvalidArgument,
+                    "input is null with non-zero length",
+                ));
+            }
+            let input: &[u8] = if req.input_len == 0 {
+                &[]
+            } else {
+                unsafe { std::slice::from_raw_parts(req.input, req.input_len) }
+            };
+            if input.len() < 16 {
+                return Err(FfiError::new(
+                    FontisanStatus::InvalidArgument,
+                    "input is shorter than the 16-byte parameter prefix",
+                ));
+            }
+            let param = u32::from_be_bytes([input[0], input[1], input[2], input[3]]);
+            let mut ts = [0u8; 8];
+            ts.copy_from_slice(&input[8..16]);
+            let font = &input[16..];
+            let failed = |e: crate::convert::ConvertError| {
+                FfiError::new(FontisanStatus::ConvertFailed, e.to_string())
+            };
+            if req.op == OP_CONVERT {
+                let target = crate::convert::Target::from_code(param).ok_or_else(|| {
+                    FfiError::new(
+                        FontisanStatus::InvalidArgument,
+                        format!("unknown target {param}"),
+                    )
+                })?;
+                crate::convert::convert(font, target, i64::from_be_bytes(ts)).map_err(failed)
+            } else {
+                let x = crate::convert::extract(font, param as usize).map_err(failed)?;
+                let mut out = Vec::with_capacity(4 + x.basename.len() + x.data.len());
+                out.extend_from_slice(&(x.basename.len() as u32).to_be_bytes());
+                out.extend_from_slice(x.basename.as_bytes());
+                out.extend_from_slice(&x.data);
+                Ok(out)
+            }
         }
         op => Err(FfiError::new(
             FontisanStatus::UnknownOp,

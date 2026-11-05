@@ -12,7 +12,9 @@ pub(crate) use woff2::{KNOWN_TAGS, brotli_inflate, triplet_decode};
 use std::fmt;
 
 pub use woff1::decode_woff;
-pub use woff2::{decode_woff2, decode_woff2_collection, is_woff2_collection};
+pub use woff2::{
+    decode_woff2, decode_woff2_collection, decode_woff2_ruby_padding, is_woff2_collection,
+};
 
 /// Why a WOFF/WOFF2 input was rejected. Never a panic.
 #[derive(Debug, Clone, PartialEq, Eq)]
