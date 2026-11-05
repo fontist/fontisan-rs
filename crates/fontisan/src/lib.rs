@@ -6,6 +6,7 @@
 #![cfg_attr(not(feature = "ffi"), forbid(unsafe_code))]
 #![cfg_attr(feature = "ffi", deny(unsafe_code))]
 
+pub mod audit;
 pub mod sfnt;
 
 #[cfg(feature = "ffi")]
