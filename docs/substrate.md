@@ -73,3 +73,14 @@ ci-tier ttf/otf fonts (plus derived quirk/names fonts) and the 8 malformed kinds
   truncated-half; PARTLY FALSE out of the box: read-fonts rejects nothing about
   numTables overrun (findings 1), so an explicit guard is needed.
 - MSRV <= 1.85: CONFIRMED (exactly 1.85).
+
+## 1c outcome
+
+- read-fonts is now a normal dependency; `scripts/check-no-c.sh` covers it and stays green.
+- Only the cmap subtables (formats 4 and 12) are decoded by read-fonts. The table directory and head, hhea, maxp, OS/2, post and name use a small cursor reader, because Ruby's error surface is cursor-shaped:
+  - a field read with no bytes left raises `EOFError`; with some bytes left, `IOError "data truncated"`;
+  - a directory EOF is rewrapped as `RuntimeError "Invalid TrueTypeFont file: End of file reached"`;
+  - an empty table body parses to an all-zero record; maxp's TrueType fields exist only for version 0x00010000; OS/2 field groups follow version >= 1/2/5; name storage is the bytes after the records (`string_offset` ignored); hhea's reserved skip raises `EOFError` on any shortage.
+- No eager `12 + 16*numTables` guard is needed: the cursor fails at the same field Ruby does.
+- `tests/truncation.rs` cuts the 1c tables of TestTTF and TestOTF at 437 lengths; the cursor model matches Ruby's outcome and error class in all 437, read-fonts alone diverges in 114.
+- Known limits: Ruby's format 4/12 parsers on malformed cmap subtables are untested (no corpus case); parse errors in non-1c tables report as none until 1d/1f.
