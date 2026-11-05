@@ -27,3 +27,10 @@ pub use variations::{
     IvsDigest, MapDigest, MvarDigest, MvarRecord, StatAxis, StatDigest,
 };
 pub use woff2_view::Woff2Header;
+
+/// Single-font WOFF2 to the sfnt Ruby's `Woff2Font` lays out in memory; the
+/// parity tests use it to compare WOFF2 output table by table.
+#[doc(hidden)]
+pub fn woff2_to_sfnt(data: &[u8]) -> Result<Vec<u8>, Error> {
+    woff2_view::single(data)
+}

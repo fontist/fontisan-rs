@@ -2,8 +2,7 @@
 //!
 //! Scope: static fonts. woff/woff2 to a same-flavour ttf/otf (through the
 //! Ruby `FontWriter` port), every static source to woff, and `UnpackCommand`
-//! style member extract. Outline conversion (1h-outline), WOFF2 encode
-//! collections (1h-coll) and variable instancing (1i) are
+//! style member extract. Collections (1h-coll) are
 //! typed [`ConvertError`]s with class `fontisan::Unsupported`.
 
 mod extract;
@@ -142,18 +141,22 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
             ));
         }
     };
-    let (_version, tables) = tables_of(raw)?;
+    let (sfnt_version, tables) = tables_of(raw)?;
+    let is_variable = has(&tables, b"fvar");
 
-    if has(&tables, b"fvar") {
+    // 1i-instance: a variable font goes through instancing at its default
+    // location first, whatever the target (Ruby's `:instance` strategy).
+    let tables = if is_variable {
         if has(&tables, b"CFF2") {
             return Err(ConvertError::transform(
                 "Static instancing needs TrueType outlines with gvar (CFF2 variable fonts are not supported yet)",
             ));
         }
-        return Err(ConvertError::unsupported(
-            "variable font instancing is card 1i",
-        ));
-    }
+        crate::instance::instance_tables(&tables, &[])
+            .map_err(|e| ConvertError::transform(e.message))?
+    } else {
+        tables
+    };
 
     match target {
         Target::Woff => Ok(woff1::encode(&tables)),
@@ -180,7 +183,17 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
             let version = if want_glyf { 0x0001_0000 } else { 0x4F54_544F };
             Ok(write_font(&tables, version))
         }
-        Target::Woff2 => woff2::encode_woff2(raw, Some(timestamp))
-            .map_err(|e| ConvertError::transform(e.to_string())),
+        Target::Woff2 => {
+            // A variable source encodes its instanced tables, not the raw input.
+            let instanced;
+            let src = if is_variable {
+                instanced = write_font(&tables, sfnt_version);
+                &instanced[..]
+            } else {
+                raw
+            };
+            woff2::encode_woff2(src, Some(timestamp))
+                .map_err(|e| ConvertError::transform(e.to_string()))
+        }
     }
 }

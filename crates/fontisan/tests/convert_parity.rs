@@ -357,7 +357,7 @@ fn convert_and_extract_match_goldens() {
         failures.join("\n")
     );
     assert!(
-        matched >= 55,
+        matched >= 73,
         "only {matched} cases matched; goldens missing?"
     );
 }

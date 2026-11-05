@@ -9,6 +9,7 @@
 pub mod audit;
 pub mod convert;
 pub mod indexability;
+pub mod instance;
 pub mod sfnt;
 
 #[cfg(feature = "ffi")]

@@ -37,6 +37,11 @@ enum {
  * 8..15: Brotli quality + 1 (0 = default 11). The result payload is the WOFF2 file. */
 #define FONTISAN_OP_WOFF2_ENCODE 3u
 #define FONTISAN_WOFF2_FLAG_TIMESTAMP 1u
+/* input = u32 BE axis count N, N x (4-byte axis tag, i32 BE 16.16 user value),
+ * then the font bytes (ttf/woff/woff2); axes left out take their fvar default.
+ * payload = the static instance (gvar fonts only), as Ruby Variable::Instancer#instance.
+ * Failure message is "<ruby class>: <message>" with FONTISAN_E_CONVERT_FAILED. */
+#define FONTISAN_OP_INSTANCE 7u
 
 typedef struct {
   uint32_t magic;

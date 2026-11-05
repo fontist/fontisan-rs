@@ -106,6 +106,11 @@ pub const OP_WOFF2_ENCODE: u32 = 3;
 /// `flags` bits 8..=15 of [`OP_WOFF2_ENCODE`]: Brotli quality + 1 (0 = the default, 11).
 /// `flags` bit for [`OP_WOFF2_ENCODE`]: the timestamp prefix is meaningful.
 pub const WOFF2_FLAG_TIMESTAMP: u32 = 1;
+/// Static instance of a gvar variable font. `input` = u32 BE axis count N,
+/// N x (4-byte axis tag, i32 BE 16.16 user value), then the font bytes
+/// (ttf/woff/woff2). Axes left out take their fvar default. Payload: the
+/// static sfnt, exactly as `Variable::Instancer#instance`.
+pub const OP_INSTANCE: u32 = 7;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -243,6 +248,41 @@ unsafe fn dispatch(req: *const FontisanRequest) -> Result<Vec<u8>, FfiError> {
             };
             crate::convert::woff2::encode_woff2_with_quality(&input[8..], ts, q)
                 .map_err(|e| FfiError::new(FontisanStatus::InvalidArgument, e.to_string()))
+        }
+        OP_INSTANCE => {
+            if req.input.is_null() && req.input_len != 0 {
+                return Err(FfiError::new(
+                    FontisanStatus::InvalidArgument,
+                    "input is null with non-zero length",
+                ));
+            }
+            let input: &[u8] = if req.input_len == 0 {
+                &[]
+            } else {
+                unsafe { std::slice::from_raw_parts(req.input, req.input_len) }
+            };
+            let short = || {
+                FfiError::new(
+                    FontisanStatus::InvalidArgument,
+                    "input is shorter than its axis list",
+                )
+            };
+            let n = input.get(..4).ok_or_else(short)?;
+            let n = u32::from_be_bytes([n[0], n[1], n[2], n[3]]) as usize;
+            let list_end = n
+                .checked_mul(8)
+                .and_then(|l| l.checked_add(4))
+                .filter(|&e| e <= input.len())
+                .ok_or_else(short)?;
+            let coords: Vec<([u8; 4], f64)> = input[4..list_end]
+                .chunks_exact(8)
+                .map(|c| {
+                    let raw = i32::from_be_bytes([c[4], c[5], c[6], c[7]]);
+                    ([c[0], c[1], c[2], c[3]], f64::from(raw) / 65536.0)
+                })
+                .collect();
+            crate::instance::instance(&input[list_end..], &coords)
+                .map_err(|e| FfiError::new(FontisanStatus::ConvertFailed, e.to_string()))
         }
         op => Err(FfiError::new(
             FontisanStatus::UnknownOp,
