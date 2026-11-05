@@ -6,6 +6,7 @@ mod cmap;
 mod cursor;
 mod error;
 mod font;
+mod layout;
 mod outlines;
 mod standard_names;
 mod tables;
@@ -18,6 +19,7 @@ pub use font::{
     Font, Format, LoadingMode, METADATA_TABLES, Options, TableEntry, TableSummary, detect_format,
     face_count,
 };
+pub use layout::{LayoutTable, Tag};
 pub use outlines::{OutlineKind, OutlineSummary, Outlines};
 pub use tables::{Head, Hhea, Maxp, Name, NameRecord, Os2, Post, Snapshot, Value};
 pub use variations::{

@@ -141,3 +141,25 @@ impl Font<'_> {
         }
     }
 }
+
+impl Font<'_> {
+    /// The audit's `ot_cff` view of `font.table("CFF ")`: the CharStrings INDEX
+    /// count, or `Ok(None)` when the table is absent/unreadable. A malformed
+    /// table is the `Err` Ruby's `Tables::Cff.read` raises; a CharStrings INDEX
+    /// that fails to parse counts as 0 (Ruby rescues it in `glyph_count_from_cff`).
+    pub fn cff_charstring_count(&self) -> Result<Option<usize>, Error> {
+        let Some(Some(data)) = self.available("CFF ")? else {
+            return Ok(None);
+        };
+        match cff::glyphs(data) {
+            Ok(g) => Ok(Some(g.len())),
+            Err(e)
+                if e.class == ErrorClass::CorruptedTable
+                    && e.message.starts_with("Failed to parse CharStrings INDEX") =>
+            {
+                Ok(Some(0))
+            }
+            Err(e) => Err(e),
+        }
+    }
+}

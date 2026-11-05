@@ -460,7 +460,7 @@ impl<'a> Font<'a> {
 
     /// Ruby's mode check in `SfntFont#table`: `Err(ArgumentError)` for a
     /// present table the mode gates out, `Ok(None)` for an absent one.
-    fn available(&self, tag: &str) -> Result<Option<Option<&[u8]>>, Error> {
+    pub(crate) fn available(&self, tag: &str) -> Result<Option<Option<&[u8]>>, Error> {
         if !self.has_table(tag) {
             return Ok(None);
         }
@@ -477,7 +477,7 @@ impl<'a> Font<'a> {
         Ok(Some(self.table_data(tag)))
     }
 
-    fn parsed<T>(
+    pub(crate) fn parsed<T>(
         &self,
         tag: &str,
         parse: fn(&[u8]) -> Result<T, Error>,
