@@ -33,6 +33,16 @@ const KNOWN_HEAD_DIVERGENCE: [(&str, &str); 0] = [];
 const STALE_EXACT: [(&str, &str, &str); 0] = [];
 const STALE_TABLES: [(&str, &str, &str, &str); 0] = [];
 
+/// Sources with CFF outlines whose `format:ttf` golden is an outline
+/// conversion (card 1h-o2t); none may fall back to `fontisan::Unsupported`.
+const O2T_CASES: [&str; 5] = [
+    "fonttools-test-otf",
+    "noto-sans-jp-subset-regular-otf",
+    "source-sans-3-regular-otf",
+    "source-sans-3-regular-otf-woff",
+    "source-sans-3-regular-otf-woff2",
+];
+
 fn goldens_dir(corpus: &std::path::Path) -> Option<PathBuf> {
     let d = std::env::var_os("FONTISAN_CONVERT_GOLDENS")
         .map(PathBuf::from)
@@ -332,6 +342,14 @@ fn convert_and_extract_match_goldens() {
     eprintln!("out of card scope ({}):", unsupported.len());
     for u in &unsupported {
         eprintln!("  {u}");
+    }
+    for id in O2T_CASES {
+        assert!(
+            !unsupported
+                .iter()
+                .any(|u| u.starts_with(&format!("{id} format:ttf:"))),
+            "{id} format:ttf must be converted by 1h-o2t, not reported unsupported"
+        );
     }
     assert!(
         failures.is_empty(),

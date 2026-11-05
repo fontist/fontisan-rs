@@ -7,6 +7,7 @@
 //! typed [`ConvertError`]s with class `fontisan::Unsupported`.
 
 mod extract;
+mod outline_o2t;
 mod outline_t2o;
 mod woff1;
 mod writer;
@@ -165,6 +166,12 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
                 outline_t2o::validate_output(&converted)?;
                 return Ok(out);
             }
+            // 1h-o2t: CFF -> glyf conversion.
+            if want_glyf && !has(&tables, b"glyf") && has(&tables, b"CFF ") {
+                let ttf = outline_o2t::convert(&tables)?;
+                return Ok(write_font(&ttf, 0x0001_0000));
+            }
+            // end 1h-o2t
             if has(&tables, b"glyf") != want_glyf {
                 return Err(ConvertError::unsupported(
                     "CFF to TrueType outline conversion is card 1h-o2t",
