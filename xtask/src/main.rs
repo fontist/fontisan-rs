@@ -8,7 +8,7 @@ use std::process::Command;
 
 /// fontist/fontisan branch issue-156/phase0-corpus-baselines (PR #161). Bumped when goldens land.
 const FONTISAN_REPO: &str = "https://github.com/fontist/fontisan.git";
-const FONTISAN_SHA: &str = "6806181894f8dd9d4fa4cba3ea3cf3ffef59d341";
+const FONTISAN_SHA: &str = "5f8d845d22dee307a8d42d977b78d97b4fd1042e";
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

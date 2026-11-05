@@ -23,7 +23,15 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
           components: clippy
       - uses: Swatinem/rust-cache@v2
+      # Parity tests need the corpus, goldens and the pinned woff2 reference; without
+      # them they skip, so CI fetches everything and turns a skip into a failure.
+      - run: cargo xtask corpus-fetch
+      - run: cargo xtask build-woff2
+      - run: scripts/woff2-reference.sh .corpus/fontisan/corpus/fonts/.tools/woff2/bin/woff2_decompress .woff2-ref .corpus/fontisan/corpus
       - run: cargo test --workspace --all-features --locked
+        env:
+          FONTISAN_SPIKE_REQUIRE_CORPUS: "1"
+          FONTISAN_WOFF2_REF_DIR: ${{ github.workspace }}/.woff2-ref
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - run: cargo bench -p fontisan --features ffi --no-run --locked
       - run: scripts/c-abi-test.sh
