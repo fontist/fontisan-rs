@@ -123,8 +123,9 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
             &sfnt_bytes
         }
         Some(Format::Woff2) => {
-            sfnt_bytes = crate::woff::decode_woff2_ruby_padding(input)
-                .map_err(|e| ConvertError::transform(e.to_string()))?;
+            // Ruby's own WOFF2 rebuild (padding, flag RLE, table order), shared with reads.
+            sfnt_bytes = crate::sfnt::woff2_view::single(input)
+                .map_err(|e| ConvertError::transform(format!("{e:?}")))?;
             &sfnt_bytes
         }
         Some(Format::Ttc | Format::Otc) => {

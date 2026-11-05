@@ -7,7 +7,7 @@
 //! - keeps the WOFF2 directory order (the decoder sorts by tag);
 //! - re-encodes every glyph itself (`Woff2::GlyfLocaReconstruct`): 2-byte glyph
 //!   alignment for a short `loca` (the decoder pads to 4), its own flag run
-//!   encoding (the repeat byte holds the run length, as Ruby writes it), and
+//!   encoding (the repeat byte holds run - 1, per the glyf spec), and
 //!   no `loca`/`glyf` size rounding;
 //! - recomputes `head.checksumAdjustment` over its own layout (single fonts);
 //! - for a collection, never reconstructs `hmtx`, and builds each member with
@@ -751,8 +751,8 @@ fn decode_simple(
             count += 1;
         }
         if count > 1 {
-            // Ruby writes the whole run length here (the TrueType repeat count is run - 1).
-            out.extend([f | FLAG_REPEAT, count as u8]);
+            // The TrueType repeat count is run - 1 (Ruby fixed in fontisan f2cd08d).
+            out.extend([f | FLAG_REPEAT, (count - 1) as u8]);
         } else {
             out.push(f);
         }

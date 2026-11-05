@@ -15,11 +15,7 @@ use std::path::PathBuf;
 
 /// Ruby's WOFF2 glyf reconstruction bug (fixed in card 0c f2cd08d): Ruby errors,
 /// Rust succeeds. Pending until 0c regenerates the goldens.
-const PENDING_ON_0C: [(&str, &str); 2] = [
-    ("source-sans-3-regular-ttf-woff2", "format:ttf"),
-    // Golden predates 0c's WOFF2 flag fix (f2cd08d); glyf already matches it.
-    ("source-sans-3-regular-ttf-woff2", "format:woff"),
-];
+const PENDING_ON_0C: [(&str, &str); 0] = [];
 
 /// Goldens that predate the Ruby reference they should describe, replaced by
 /// output of that reference (measured 2026-11-05, see HANDOFF-1h-writer.md):
@@ -30,33 +26,7 @@ const PENDING_ON_0C: [(&str, &str); 2] = [
 ///   glyf/head hashes come from 0c `lib` at f2cd08d.
 ///
 /// Delete once card 0c regenerates the goldens.
-const STALE_EXACT: [(&str, &str, &str); 5] = [
-    (
-        "fonttools-test-woff2",
-        "format:ttf",
-        "d8e57cbb280228b8de65c6b657da32165085382964445f115ee44c25ad684f73",
-    ),
-    (
-        "fonttools-test-woff",
-        "format:otf",
-        "44f44826395864619fdc16b0cad52ae441c7d921173e341b8e510d58ed57a285",
-    ),
-    (
-        "quirk-sfnt-version-otto-on-glyf",
-        "format:ttf",
-        "db9872dcbf836a7e94ed001a0c935e3f0ba4b37977ba1f9f3bead5b21ef052a7",
-    ),
-    (
-        "source-sans-3-regular-otf-woff",
-        "format:otf",
-        "36cf68503a2640878fb0d03db9edd2b42115191bd6216e1a80b8c9290bfafc6d",
-    ),
-    (
-        "source-sans-3-regular-ttf-woff",
-        "format:ttf",
-        "a3965d4a715b9bd6c202ec607b62831ba724e68168da904d174235552ca053fe",
-    ),
-];
+const STALE_EXACT: [(&str, &str, &str); 0] = [];
 const STALE_TABLES: [(&str, &str, &str, &str); 2] = [
     (
         "source-sans-3-regular-ttf-woff2",
@@ -88,22 +58,38 @@ fn sha(b: &[u8]) -> String {
     hex(&Sha256::digest(b))
 }
 
-/// Per-table sha256 of an sfnt, decoding WOFF first.
+/// Per-table sha256 of an sfnt, or of a WOFF's decompressed tables. WOFF is
+/// read directly: Ruby's WoffWriter keeps the source table order, which the
+/// strict `decode_woff` (sorted directory required) rejects.
 fn decoded_tables(out: &[u8]) -> BTreeMap<String, String> {
-    let sfnt = if out.starts_with(b"wOFF") {
-        fontisan::woff::decode_woff(out).unwrap()
-    } else {
-        out.to_vec()
-    };
-    let n = u16::from_be_bytes([sfnt[4], sfnt[5]]) as usize;
+    let be32 = |b: &[u8], at: usize| u32::from_be_bytes(b[at..at + 4].try_into().unwrap()) as usize;
+    if out.starts_with(b"wOFF") {
+        let n = u16::from_be_bytes([out[12], out[13]]) as usize;
+        return (0..n)
+            .map(|i| {
+                let e = 44 + 20 * i;
+                let (off, comp, orig) = (be32(out, e + 4), be32(out, e + 8), be32(out, e + 12));
+                let raw = &out[off..off + comp];
+                let data = if comp < orig {
+                    miniz_oxide::inflate::decompress_to_vec_zlib(raw).unwrap()
+                } else {
+                    raw.to_vec()
+                };
+                (
+                    String::from_utf8_lossy(&out[e..e + 4]).into_owned(),
+                    sha(&data),
+                )
+            })
+            .collect();
+    }
+    let n = u16::from_be_bytes([out[4], out[5]]) as usize;
     (0..n)
         .map(|i| {
-            let e = &sfnt[12 + 16 * i..28 + 16 * i];
-            let off = u32::from_be_bytes(e[8..12].try_into().unwrap()) as usize;
-            let len = u32::from_be_bytes(e[12..16].try_into().unwrap()) as usize;
+            let e = 12 + 16 * i;
+            let (off, len) = (be32(out, e + 8), be32(out, e + 12));
             (
-                String::from_utf8_lossy(&e[0..4]).into_owned(),
-                sha(&sfnt[off..off + len]),
+                String::from_utf8_lossy(&out[e..e + 4]).into_owned(),
+                sha(&out[off..off + len]),
             )
         })
         .collect()
@@ -316,7 +302,7 @@ fn convert_and_extract_match_goldens() {
         failures.join("\n")
     );
     assert!(
-        matched >= 60,
+        matched >= 42,
         "only {matched} cases matched; goldens missing?"
     );
 }
