@@ -18,6 +18,9 @@ ffi = []
 # cursor-based reader that reproduces the Ruby reference's error surface, which
 # read-fonts cannot (see docs/substrate.md, "1c outcome").
 read-fonts = "=0.46.0"
+# WOFF/WOFF2 decode (1e): both pure Rust, no *-sys / links (scripts/check-no-c.sh).
+miniz_oxide = { version = "=0.8.9", default-features = false, features = ["with-alloc"] }
+brotli-decompressor = { version = "=5.0.3", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 criterion = { version = "=0.5.1", default-features = false }

@@ -13,3 +13,4 @@ pub mod ffi;
 
 /// Crate version, for diagnostics.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub mod woff;
