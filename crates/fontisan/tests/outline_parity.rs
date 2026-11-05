@@ -11,11 +11,11 @@ use serde_json::Value;
 use std::path::PathBuf;
 
 fn goldens_dir() -> Option<PathBuf> {
-    let d = std::env::var_os("FONTISAN_READ_GOLDENS")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            PathBuf::from("/Users/umerhassan/fontist/wt/fontisan-phase0/corpus/goldens/read")
-        });
+    // Same lookup as variation_parity: FONTISAN_GOLDENS_DIR, else the fetched corpus.
+    let d = match std::env::var_os("FONTISAN_GOLDENS_DIR") {
+        Some(g) => PathBuf::from(g).join("read"),
+        None => common::corpus_dir().join("corpus/goldens/read"),
+    };
     if d.is_dir() {
         return Some(d);
     }
