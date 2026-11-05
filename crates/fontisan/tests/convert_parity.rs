@@ -17,6 +17,10 @@ use std::path::PathBuf;
 /// Rust succeeds. Pending until 0c regenerates the goldens.
 const PENDING_ON_0C: [(&str, &str); 0] = [];
 
+/// Cases where only `head` may differ from the golden. Empty: the shared
+/// Ruby WOFF2 rebuild (sfnt::woff2_view) now gives Ruby's checkSumAdjustment.
+const KNOWN_HEAD_DIVERGENCE: [(&str, &str); 0] = [];
+
 /// Goldens that predate the Ruby reference they should describe, replaced by
 /// output of that reference (measured 2026-11-05, see HANDOFF-1h-writer.md):
 /// * exact ttf/otf: generated before 0b's head-checksum fix (the directory
@@ -27,20 +31,7 @@ const PENDING_ON_0C: [(&str, &str); 0] = [];
 ///
 /// Delete once card 0c regenerates the goldens.
 const STALE_EXACT: [(&str, &str, &str); 0] = [];
-const STALE_TABLES: [(&str, &str, &str, &str); 2] = [
-    (
-        "source-sans-3-regular-ttf-woff2",
-        "format:woff",
-        "glyf",
-        "08ad5d17e51b58c2d205730892a80c43c097b543d6ea1b2576e4db3a6366a072",
-    ),
-    (
-        "source-sans-3-regular-ttf-woff2",
-        "format:woff",
-        "head",
-        "d5b5d6f84513bf55a04271e366258b5a900389268c53c1c67c1ab90720be0fb6",
-    ),
-];
+const STALE_TABLES: [(&str, &str, &str, &str); 0] = [];
 
 fn goldens_dir(corpus: &std::path::Path) -> Option<PathBuf> {
     let d = std::env::var_os("FONTISAN_CONVERT_GOLDENS")
@@ -52,6 +43,31 @@ fn goldens_dir(corpus: &std::path::Path) -> Option<PathBuf> {
         eprintln!("SKIPPED: no convert goldens at {}", d.display());
         None
     }
+}
+
+/// The goldens store error messages with every number run replaced by `N`
+/// (Ruby `gsub(/\b\d+\b/, "N")`).
+fn normalize_digits(m: &str) -> String {
+    let c: Vec<char> = m.chars().collect();
+    let word = |ch: char| ch.is_alphanumeric() || ch == '_';
+    let mut out = String::new();
+    let mut i = 0;
+    while i < c.len() {
+        if c[i].is_ascii_digit() && (i == 0 || !word(c[i - 1])) {
+            let mut j = i;
+            while j < c.len() && c[j].is_ascii_digit() {
+                j += 1;
+            }
+            if j == c.len() || !word(c[j]) {
+                out.push('N');
+                i = j;
+                continue;
+            }
+        }
+        out.push(c[i]);
+        i += 1;
+    }
+    out
 }
 
 fn sha(b: &[u8]) -> String {
@@ -193,14 +209,20 @@ fn check(id: &str, key: &str, case: &Value, got: &Got) -> Result<(), String> {
                     want.insert(s.2.to_string(), s.3.to_string());
                 }
                 if decoded_tables(bytes) != want {
-                    return Err("decoded tables differ".into());
+                    let diff: Vec<_> = decoded_tables(bytes)
+                        .iter()
+                        .filter(|(k, v)| want.get(*k) != Some(*v))
+                        .map(|(k, _)| k.clone())
+                        .collect();
+                    return Err(format!("decoded tables differ: {diff:?}"));
                 }
             }
             Ok(())
         }
         ("error", Got::Err(class, msg)) => {
             let want = &case["error"];
-            if class == want["class"].as_str().unwrap() && msg == want["message"].as_str().unwrap()
+            if class == want["class"].as_str().unwrap()
+                && normalize_digits(msg) == want["message"].as_str().unwrap()
             {
                 Ok(())
             } else {
@@ -232,6 +254,7 @@ fn convert_and_extract_match_goldens() {
     };
     let (mut matched, mut unsupported, mut pending, mut failures) =
         (0, Vec::new(), Vec::new(), Vec::new());
+    let mut diverged: Vec<String> = Vec::new();
     let mut paths: Vec<_> = std::fs::read_dir(&dir)
         .unwrap()
         .map(|e| e.unwrap().path())
@@ -280,6 +303,20 @@ fn convert_and_extract_match_goldens() {
                 pending.push(format!("{id} {key}"));
                 continue;
             }
+            if KNOWN_HEAD_DIVERGENCE.contains(&(id, key.as_str())) {
+                let want: BTreeMap<String, String> =
+                    serde_json::from_value(case["decoded_tables"][0].clone()).unwrap();
+                let Got::Ok(bytes, _) = &got else {
+                    panic!("{id} {key}")
+                };
+                let mut have = decoded_tables(bytes);
+                assert_eq!(have.remove("head").is_some(), want.contains_key("head"));
+                let mut want = want;
+                want.remove("head");
+                assert_eq!(have, want, "{id} {key}: only head may differ");
+                diverged.push(format!("{id} {key}"));
+                continue;
+            }
             let mut res = check(id, key, case, &got);
             #[cfg(feature = "ffi")]
             if res.is_ok() {
@@ -291,7 +328,7 @@ fn convert_and_extract_match_goldens() {
             }
         }
     }
-    eprintln!("matched {matched}; pending-on-0c {pending:?}");
+    eprintln!("matched {matched}; pending-on-0c {pending:?}; known head divergence {diverged:?}");
     eprintln!("out of card scope ({}):", unsupported.len());
     for u in &unsupported {
         eprintln!("  {u}");
@@ -302,7 +339,7 @@ fn convert_and_extract_match_goldens() {
         failures.join("\n")
     );
     assert!(
-        matched >= 42,
+        matched >= 55,
         "only {matched} cases matched; goldens missing?"
     );
 }
