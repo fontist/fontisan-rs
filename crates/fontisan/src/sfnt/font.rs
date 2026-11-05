@@ -208,6 +208,8 @@ pub struct Font<'a> {
     format: Format,
     options: Options,
     pub sfnt_version: u32,
+    /// numTables, searchRange, entrySelector, rangeShift as the directory stores them.
+    directory_fields: [u16; 4],
     entries: Vec<TableEntry>,
     /// Eagerly read table bytes by tag (last entry wins). Empty when lazy.
     eager: HashMap<[u8; 4], Range>,
@@ -296,9 +298,9 @@ impl<'a> Font<'a> {
         let mut c = Cursor::new(&bytes, at);
         let sfnt_version = c.u32()?;
         let num_tables = c.u16()?;
-        c.u16()?; // search_range
-        c.u16()?; // entry_selector
-        c.u16()?; // range_shift
+        let search_range = c.u16()?;
+        let entry_selector = c.u16()?;
+        let range_shift = c.u16()?;
         let mut entries = Vec::with_capacity((num_tables as usize).min(bytes.len() / 16));
         for _ in 0..num_tables {
             let tag: [u8; 4] = c.bytes(4)?.try_into().unwrap();
@@ -314,6 +316,7 @@ impl<'a> Font<'a> {
             format,
             options,
             sfnt_version,
+            directory_fields: [num_tables, search_range, entry_selector, range_shift],
             entries,
             eager: HashMap::new(),
         })
@@ -409,6 +412,12 @@ impl<'a> Font<'a> {
     }
     pub fn lazy(&self) -> bool {
         self.options.lazy
+    }
+    /// `(numTables, searchRange, entrySelector, rangeShift)` as stored in the
+    /// table directory header (the audit's `table_directory` check).
+    pub fn directory_fields(&self) -> (u16, u16, u16, u16) {
+        let [n, sr, es, rs] = self.directory_fields;
+        (n, sr, es, rs)
     }
     pub fn entries(&self) -> &[TableEntry] {
         &self.entries
