@@ -1,7 +1,7 @@
 //! `glyph_names` (Ruby `GlyphNameCheck`, file `glyph_name_check.rb`): length,
 //! character grammar, leading digit and duplicate glyph names from `post`.
 
-use super::rubyfmt::sfnt_err;
+use crate::audit::ruby::check_error;
 use crate::audit::types::{CheckError, Issue, Severity};
 use crate::sfnt::Font;
 
@@ -21,7 +21,7 @@ pub fn run(font: &Font<'_>) -> Result<Vec<Issue>, CheckError> {
     let names = match font.post() {
         Ok(Some(post)) => post.glyph_names(),
         Ok(None) => return Ok(Vec::new()),
-        Err(e) => return Err(sfnt_err(e)),
+        Err(e) => return Err(check_error(e)),
     };
     let mut issues = Vec::new();
     for (gid, name) in names.iter().enumerate() {

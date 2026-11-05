@@ -12,7 +12,7 @@
 //!  * `font.table("head")` failing inside the per-glyph block (outside the inner
 //!    rescue) yields one warning per glyph.
 
-use super::rubyfmt::sfnt_err;
+use crate::audit::ruby::check_error;
 use crate::audit::types::{CheckError, Issue, Severity};
 use crate::sfnt::Font;
 
@@ -26,7 +26,7 @@ pub fn run(font: &Font<'_>) -> Result<Vec<Issue>, CheckError> {
     if font.table_data("glyf").is_none() {
         return Ok(Vec::new());
     }
-    let num_glyphs = match font.maxp().map_err(sfnt_err)? {
+    let num_glyphs = match font.maxp().map_err(check_error)? {
         Some(m) => m.num_glyphs,
         None => 0,
     };

@@ -13,29 +13,28 @@ use crate::sfnt::Font;
 use checks::*;
 
 /// The `default` profile in the Ruby registry's order (`CheckRegistry::PROFILES[:default]`).
-/// Entries marked `// 1f-checks` belong to card 1f-checks and `format_round_trip`
-/// to card 1f-b; the integrator uncomments them once those modules exist.
+/// `format_round_trip` (card 1f-b) is the one Ruby check not ported yet.
 pub const REGISTRY: &[(&str, CheckFn)] = &[
-    // 1f-checks ("table_directory", table_directory::run),
-    // 1f-checks ("glyph_names", glyph_name::run),
-    // 1f-checks ("cmap", cmap::run),
-    // 1f-checks ("ots_compatibility", ots_compatibility::run),
-    // 1f-checks ("collection_integrity", collection_integrity::run),
-    // 1f-checks ("variable_font", variable_font::run),
-    // 1f-checks ("hinting", hinting::run),
-    // 1f-checks ("woff2_validation", woff2_validation::run),
-    // 1f-b ("format_round_trip", format_round_trip::run),
-    // 1f-checks ("opentype_conformance", opentype_conformance::run),
-    // 1f-checks ("naming_consistency", naming_consistency::run),
+    (table_directory::CODE, table_directory::run),
+    (glyph_name::CODE, glyph_name::run),
+    (cmap::CODE, cmap::run),
+    (ots_compatibility::CODE, ots_compatibility::run),
+    (collection_integrity::CODE, collection_integrity::run),
+    (variable_font::CODE, variable_font::run),
+    (hinting::CODE, hinting::run),
+    (woff2_validation::CODE, woff2_validation::run),
+    // 1f-b (format_round_trip::CODE, format_round_trip::run),
+    (opentype_conformance::CODE, opentype_conformance::run),
+    (naming_consistency::CODE, naming_consistency::run),
     (head::CODE, head::run),
     (hhea::CODE, hhea::run),
     (maxp::CODE, maxp::run),
-    // 1f-checks ("ot_os2", os2::run),
+    (os2::CODE, os2::run),
     (name_table::CODE, name_table::run),
     (post::CODE, post::run),
     (kern::CODE, kern::run),
     (cff_table::CODE, cff_table::run),
-    // 1f-checks ("ot_glyf", glyf::run),
+    (glyf::CODE, glyf::run),
     (layout_table::CODE, layout_table::run),
 ];
 

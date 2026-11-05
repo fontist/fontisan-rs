@@ -1,7 +1,7 @@
 //! `ot_os2` (Ruby `Os2Check`): usWeightClass/usWidthClass ranges, reserved
 //! fsSelection bits, typo/win metrics sign, all-zero PANOSE.
 
-use super::rubyfmt::required;
+use crate::audit::ruby::need;
 use crate::audit::types::{CheckError, Issue, Severity};
 use crate::sfnt::Font;
 
@@ -12,7 +12,7 @@ pub fn run(font: &Font<'_>) -> Result<Vec<Issue>, CheckError> {
     if !font.has_table("OS/2") {
         return Ok(Vec::new());
     }
-    let os2 = required(font.os2(), "us_weight_class")?;
+    let os2 = need(font.os2(), "us_weight_class")?;
     let mut issues = Vec::new();
     let w = i64::from(os2.us_weight_class);
     if !(1..=1000).contains(&w) {

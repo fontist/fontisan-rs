@@ -12,7 +12,7 @@
 //!    scalar); has_stems needs a scalar non-zero number (an Array raises on
 //!    `zero?`, rescued to false).
 
-use super::rubyfmt::required;
+use crate::audit::ruby::need;
 use crate::audit::types::{CheckError, Issue, Severity};
 use crate::sfnt::Font;
 
@@ -53,7 +53,7 @@ fn truetype(font: &Font<'_>) -> Result<Vec<Issue>, CheckError> {
     let mut issues = Vec::new();
     let has_fpgm = font.has_table("fpgm");
     if has_fpgm && has_data(font, "glyf") {
-        let maxp = required(font.maxp(), "version_1_0?")?;
+        let maxp = need(font.maxp(), "version_1_0?")?;
         if let Some(v1) = maxp.v1 {
             let (zones, stack) = (v1[4], v1[9]);
             if has_data(font, "fpgm") && stack == 0 {

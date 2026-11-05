@@ -1,13 +1,11 @@
 //! 1f-core: the audit report against `audit.default` / `audit.validate` of the
-//! read goldens (ci sfnt fonts incl. the `_swallow` cases), and the
+//! read goldens (ci fonts incl. the `_swallow` cases), and the
 //! `indexability` profile against the scan goldens' `validation` field.
 //!
-//! Only the categories of the checks registered in `audit::REGISTRY` are compared
-//! (the golden's other issues are filtered out and its summary recomputed over
-//! the filtered list); the non-issue report fields are compared whole.
-//! Pending (not compared, counted and printed): WOFF/WOFF2/dfont/Type 1 sources
-//! (need 1e-wire or are routed to Ruby) and every category whose check is not
-//! registered yet (1f-checks, 1f-b).
+//! Every category is compared, including the WOFF/WOFF2/collection faces, except
+//! `format_round_trip` (card 1f-b), whose golden issues are dropped and the
+//! summary recomputed. Pending (counted and printed): dfont (unsupported) and
+//! Type 1 (golden is a Ruby error), both routed to Ruby.
 mod common;
 #[path = "common/goldens.rs"]
 mod goldens;
@@ -107,22 +105,22 @@ fn report_json(r: &Report) -> Value {
     Value::Object(o)
 }
 
-/// Keep only the issues of registered categories and recompute the summary.
-fn filter_golden(face: &Value, codes: &[&str]) -> Value {
+/// The one category not ported yet (card 1f-b); its golden issues are dropped and
+/// the summary recomputed over the rest.
+const PENDING_CATEGORY: &str = "format_round_trip";
+
+fn without_pending_category(face: &Value) -> Value {
     let mut face = face.clone();
     let Some(all) = face
         .get("validation_issues")
         .and_then(|v| v.as_array())
         .cloned()
     else {
-        if face.get("validation_summary").is_some() {
-            face["validation_summary"] = summary_json(&Summary::from_issues(&[]));
-        }
         return face;
     };
     let kept: Vec<Value> = all
         .into_iter()
-        .filter(|i| codes.contains(&i["category"].as_str().unwrap()))
+        .filter(|i| i["category"] != PENDING_CATEGORY)
         .collect();
     let parsed: Vec<audit::Issue> = kept
         .iter()
@@ -149,13 +147,15 @@ fn filter_golden(face: &Value, codes: &[&str]) -> Value {
 }
 
 #[test]
-fn audit_matches_goldens_on_every_ci_sfnt_font() {
+fn audit_matches_goldens_on_every_ci_font() {
     let Some(corpus) = corpus() else { return };
     let Some(root) = goldens::goldens_root() else {
         return;
     };
     let codes = audit::registered_codes();
+    assert!(!codes.contains(&PENDING_CATEGORY));
     let (mut compared, mut pending) = (0, Vec::new());
+    let mut formats = std::collections::BTreeSet::<String>::new();
     let mut by_category = std::collections::BTreeMap::<String, usize>::new();
     for case in goldens::cases(&corpus, &root) {
         for (profile, validate) in [("default", false), ("validate", true)] {
@@ -171,7 +171,7 @@ fn audit_matches_goldens_on_every_ci_sfnt_font() {
                 Ok(g) => g,
                 Err(e) if e.class == ErrorClass::Unsupported => {
                     pending.push(format!(
-                        "{} {profile}: {} needs 1e-wire / unsupported",
+                        "{} {profile}: {} (dfont; routed to Ruby)",
                         case.id,
                         e.class.ruby_name()
                     ));
@@ -182,13 +182,12 @@ fn audit_matches_goldens_on_every_ci_sfnt_font() {
             assert_eq!(got.len(), faces.len(), "{} {profile}: face count", case.id);
             for (i, (g, w)) in got.iter().zip(faces).enumerate() {
                 let w = if validate {
-                    filter_golden(w, &codes)
+                    without_pending_category(w)
                 } else {
                     w.clone()
                 };
                 let mut g = report_json(g);
                 if validate {
-                    // Compare against the golden restricted to registered categories.
                     assert!(g.get("validation_summary").is_some());
                 }
                 if let Value::Object(o) = &mut g {
@@ -203,6 +202,7 @@ fn audit_matches_goldens_on_every_ci_sfnt_font() {
                         .entry(i["category"].as_str().unwrap().into())
                         .or_default() += 1;
                 }
+                formats.insert(w["source_format"].as_str().unwrap().to_string());
                 compared += 1;
             }
         }
@@ -211,14 +211,22 @@ fn audit_matches_goldens_on_every_ci_sfnt_font() {
         eprintln!("PENDING: {p}");
     }
     eprintln!(
-        "audit parity: {compared} reports compared, {} pending, registered {codes:?}",
-        pending.len()
+        "audit parity: {compared} reports compared, {} pending, registered {} checks",
+        pending.len(),
+        codes.len()
     );
     eprintln!("issues compared by category: {by_category:?}");
     assert!(compared >= 60, "too few compared: {compared}");
     assert!(
         by_category.contains_key("ot_layout"),
         "ot_layout never exercised"
+    );
+    for fmt in ["woff", "woff2", "woff2_collection"] {
+        assert!(formats.contains(fmt), "no {fmt} report compared");
+    }
+    assert!(
+        by_category.contains_key("woff2_validation"),
+        "woff2_validation never exercised"
     );
 }
 

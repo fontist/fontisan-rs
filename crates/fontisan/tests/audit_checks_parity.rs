@@ -1,37 +1,17 @@
-//! 1f-checks parity: the Rust audit checks against the Ruby `audit.validate`
-//! goldens (`validation_issues`), every sfnt face of every golden plus the
-//! `_swallow` hand-built cases. The check set here is a subset of the Ruby
-//! registry, so the golden issues are filtered to this set's categories; order
-//! within that set follows the Ruby default-profile order.
-//!
-//! WOFF/WOFF2 goldens need the 1e wire-up and Type 1 / dfont are routed to Ruby:
-//! they are skipped (and counted) here. Goldens: `FONTISAN_GOLDENS_DIR/read`,
+//! Registry parity: every registered check against the Ruby `audit.validate`
+//! goldens (`validation_issues`), every sfnt, WOFF, WOFF2 and WOFF2-collection
+//! face of every golden plus the `_swallow` hand-built cases. Only
+//! `format_round_trip` (card 1f-b) is dropped from the golden; dfont and Type 1
+//! are routed to Ruby and skipped (and counted). Goldens: `FONTISAN_GOLDENS_DIR/read`,
 //! else `<corpus>/corpus/goldens/read`; absent goldens skip with a message and
 //! `FONTISAN_SPIKE_REQUIRE_CORPUS=1` makes the absence a failure.
 mod common;
 
 use common::*;
-use fontisan::audit::checks::*;
-use fontisan::audit::{CheckError, CheckFn, Issue};
-use fontisan::sfnt::{Font, LoadingMode, Options, face_count};
+use fontisan::audit::{CheckError, Issue, REGISTRY};
+use fontisan::sfnt::{Font, Format, LoadingMode, Options, detect_format, face_count};
 use serde_json::{Value, json};
 use std::path::PathBuf;
-
-/// Ruby default-profile order, restricted to the checks implemented in 1f-checks.
-const CHECKS: &[(&str, CheckFn)] = &[
-    (table_directory::CODE, table_directory::run),
-    (glyph_name::CODE, glyph_name::run),
-    (cmap::CODE, cmap::run),
-    (ots_compatibility::CODE, ots_compatibility::run),
-    (collection_integrity::CODE, collection_integrity::run),
-    (variable_font::CODE, variable_font::run),
-    (hinting::CODE, hinting::run),
-    (woff2_validation::CODE, woff2_validation::run),
-    (opentype_conformance::CODE, opentype_conformance::run),
-    (naming_consistency::CODE, naming_consistency::run),
-    (os2::CODE, os2::run),
-    (glyf::CODE, glyf::run),
-];
 
 fn goldens_dir() -> Option<PathBuf> {
     let dir = match std::env::var_os("FONTISAN_GOLDENS_DIR") {
@@ -62,7 +42,7 @@ fn issue_json(i: &Issue) -> Value {
 
 fn run_checks(font: &Font<'_>) -> Vec<Value> {
     let mut out = Vec::new();
-    for (code, run) in CHECKS {
+    for (code, run) in REGISTRY {
         match run(font) {
             Ok(issues) => out.extend(issues.iter().map(issue_json)),
             Err(e) => out.push(issue_json(&e.into_issue(code))),
@@ -101,7 +81,6 @@ fn checks_match_ruby_validation_issues() {
         }
     }
     paths.sort();
-    let codes: Vec<&str> = CHECKS.iter().map(|(c, _)| *c).collect();
     let (mut faces, mut skipped, mut issues_seen) = (0, Vec::new(), 0);
     for path in paths {
         let g: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
@@ -111,8 +90,8 @@ fn checks_match_ruby_validation_issues() {
             continue;
         };
         let bytes = golden_font(Some(&corpus), &dir, &path, &g).expect("font for golden");
-        if face_count(&bytes).is_none() {
-            skipped.push(format!("{name}: not an sfnt (1e / routed to Ruby)"));
+        if matches!(detect_format(&bytes), Some(Format::Dfont)) || face_count(&bytes).is_none() {
+            skipped.push(format!("{name}: dfont / Type 1 (routed to Ruby)"));
             continue;
         }
         for (idx, face) in oks.iter().enumerate() {
@@ -127,7 +106,7 @@ fn checks_match_ruby_validation_issues() {
                 Ok(f) => f,
                 Err(e) => {
                     skipped.push(format!(
-                        "{name}#{idx}: load fails ({}), pending 1e-wire",
+                        "{name}#{idx}: load fails ({})",
                         e.class.ruby_name()
                     ));
                     continue;
@@ -138,7 +117,7 @@ fn checks_match_ruby_validation_issues() {
                 .cloned()
                 .unwrap_or_default()
                 .into_iter()
-                .filter(|i| codes.contains(&i["category"].as_str().unwrap_or("")))
+                .filter(|i| i["category"] != "format_round_trip")
                 .collect();
             let got = run_checks(&font);
             assert_eq!(got, want, "{name} face {idx}");

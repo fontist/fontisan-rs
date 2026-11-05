@@ -26,3 +26,4 @@ pub use variations::{
     Avar, AxisValue, DigestFailure, Fvar, FvarAxis, FvarInstance, GvarDigest, HvarDigest,
     IvsDigest, MapDigest, MvarDigest, MvarRecord, StatAxis, StatDigest,
 };
+pub use woff2_view::Woff2Header;

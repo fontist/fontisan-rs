@@ -1,7 +1,7 @@
 //! `variable_font` (Ruby `VariableFontCheck`): fvar axis uniqueness and ranges,
 //! instance coordinate ranges, and the gvar/HVAR/STAT companions.
 
-use super::rubyfmt::{fixed, ruby_float, sfnt_err};
+use crate::audit::ruby::{check_error, fixed, float_to_s};
 use crate::audit::types::{CheckError, Issue, Severity};
 use crate::sfnt::Font;
 
@@ -11,9 +11,9 @@ pub fn run(font: &Font<'_>) -> Result<Vec<Issue>, CheckError> {
     if !font.has_table("fvar") {
         return Ok(Vec::new());
     }
-    let Some(fvar) = font.fvar().map_err(sfnt_err)? else {
+    let Some(fvar) = font.fvar().map_err(check_error)? else {
         // table data past EOF: `font.table("fvar")` is nil
-        return Err(super::rubyfmt::nil_method("axes"));
+        return Err(crate::audit::ruby::nil_method("axes"));
     };
     let mut issues = Vec::new();
     let axes = &fvar.axes;
@@ -54,9 +54,9 @@ pub fn run(font: &Font<'_>) -> Result<Vec<Issue>, CheckError> {
                     format!(
                         "fvar axis '{}' ({idx}) has invalid range: min={} default={} max={} (must be min \u{2264} default \u{2264} max)",
                         a.tag,
-                        ruby_float(min),
-                        ruby_float(default),
-                        ruby_float(max)
+                        float_to_s(min),
+                        float_to_s(default),
+                        float_to_s(max)
                     ),
                 )
                 .at(format!("fvar.axes.{idx}")),
@@ -94,10 +94,10 @@ pub fn run(font: &Font<'_>) -> Result<Vec<Issue>, CheckError> {
                     Severity::Warning,
                     format!(
                         "fvar instance {idx} has coordinate {} for axis '{}' outside its range [{}, {}]",
-                        ruby_float(coord),
+                        float_to_s(coord),
                         axis.tag,
-                        ruby_float(min),
-                        ruby_float(max)
+                        float_to_s(min),
+                        float_to_s(max)
                     ),
                 )
                 .at(format!("fvar.instances.{idx}.{}", axis.tag)),

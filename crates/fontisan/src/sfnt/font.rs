@@ -213,9 +213,17 @@ pub struct Font<'a> {
     entries: Vec<TableEntry>,
     /// Eagerly read table bytes by tag (last entry wins). Empty when lazy.
     eager: HashMap<[u8; 4], Range>,
+    /// The `Woff2Header` of a single-font WOFF2 (Ruby's `Woff2Font`); `None` for
+    /// every other source, including WOFF2 collection members (plain sfnt fonts there).
+    woff2_header: Option<super::Woff2Header>,
 }
 
 impl<'a> Font<'a> {
+    /// The WOFF2 header of a single-font WOFF2 source.
+    pub fn woff2_header(&self) -> Option<&super::Woff2Header> {
+        self.woff2_header.as_ref()
+    }
+
     /// Face 0, `full` mode, eager: the entry point for already-decoded sfnt bytes.
     pub fn from_bytes(bytes: &'a [u8]) -> Result<Self, Error> {
         Self::load(bytes, 0, Options::default())
@@ -284,6 +292,9 @@ impl<'a> Font<'a> {
             },
         };
         let mut f = Self::read_directory(Cow::Owned(decoded), 0, format, options)?;
+        if format == Format::Woff2 {
+            f.woff2_header = Some(super::Woff2Header::parse(bytes)?);
+        }
         f.read_table_data(options.lazy && !format.is_collection())?;
         Ok(f)
     }
@@ -319,6 +330,7 @@ impl<'a> Font<'a> {
             directory_fields: [num_tables, search_range, entry_selector, range_shift],
             entries,
             eager: HashMap::new(),
+            woff2_header: None,
         })
     }
 

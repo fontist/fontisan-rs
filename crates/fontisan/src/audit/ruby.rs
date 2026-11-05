@@ -11,12 +11,17 @@ pub fn check_error(e: Error) -> CheckError {
 /// `font.table(tag)` followed by a method call: a table that is listed but not
 /// readable is `nil`, so the first method call raises `NoMethodError`.
 pub fn need<T>(table: Result<Option<T>, Error>, method: &str) -> Result<T, CheckError> {
-    table.map_err(check_error)?.ok_or_else(|| {
-        CheckError::new(
-            "NoMethodError",
-            format!("undefined method '{method}' for nil"),
-        )
-    })
+    table
+        .map_err(check_error)?
+        .ok_or_else(|| nil_method(method))
+}
+
+/// Ruby 3.4's `NoMethodError` for a call on nil.
+pub fn nil_method(method: &str) -> CheckError {
+    CheckError::new(
+        "NoMethodError",
+        format!("undefined method '{method}' for nil"),
+    )
 }
 
 /// `Integer#to_s(16)`: lowercase, with a leading `-` for negatives.
@@ -29,7 +34,7 @@ pub fn hex(v: i64) -> String {
 }
 
 /// Ruby `Float#to_s`: shortest round-trip digits, fixed notation for decimal
-/// exponents in (-4, 16], otherwise `d.ddde+XX`.
+/// exponents in (-4, 15], otherwise `d.ddde+XX`.
 pub fn float_to_s(f: f64) -> String {
     if f == 0.0 {
         return if f.is_sign_negative() { "-0.0" } else { "0.0" }.into();
@@ -40,7 +45,7 @@ pub fn float_to_s(f: f64) -> String {
     let digits = mant.replace('.', "");
     let decpt = exp + 1;
     let sign = if f < 0.0 { "-" } else { "" };
-    let body = if 0 < decpt && decpt <= 16 {
+    let body = if 0 < decpt && decpt <= 15 {
         let n = decpt as usize;
         if digits.len() <= n {
             format!("{digits}{}.0", "0".repeat(n - digits.len()))
@@ -81,6 +86,8 @@ mod tests {
             (1.52587890625e-5, "1.52587890625e-05"),
             (0.0001, "0.0001"),
             (100000.0, "100000.0"),
+            (1e14, "100000000000000.0"),
+            (1e15, "1.0e+15"),
             (1e16, "1.0e+16"),
             (1234567.5, "1234567.5"),
             (0.0, "0.0"),

@@ -19,7 +19,6 @@ pub mod naming_consistency;
 pub mod opentype_conformance;
 pub mod os2;
 pub mod ots_compatibility;
-pub(crate) mod rubyfmt;
 pub mod table_directory;
 pub mod variable_font;
 pub mod woff2_validation;

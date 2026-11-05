@@ -3,7 +3,7 @@
 //! WOFF/WOFF2 faces with a loca table raise in Ruby (`WoffFont`/`Woff2Font` have
 //! no `tables`), reproduced as the golden NoMethodError.
 
-use super::rubyfmt::{nil_method, required};
+use crate::audit::ruby::{need, nil_method};
 use crate::audit::types::{CheckError, Issue, Severity};
 use crate::sfnt::{Font, Format};
 
@@ -49,13 +49,13 @@ pub fn run(font: &Font<'_>) -> Result<Vec<Issue>, CheckError> {
                 format!("undefined method 'tables' for {r}"),
             ));
         }
-        let head = required(font.head(), "index_to_loc_format")?;
+        let head = need(font.head(), "index_to_loc_format")?;
         let loca_entry = font.entries().iter().find(|e| &e.tag == b"loca");
         // `loca` is nil when its data starts past EOF
         if let (Some(entry), Some(_)) = (loca_entry, font.table_data("loca")) {
             let format = head.index_to_loc_format;
             // `maxp&.num_glyphs.to_i`: a missing maxp counts as 0 glyphs
-            let num_glyphs = match font.maxp().map_err(super::rubyfmt::sfnt_err)? {
+            let num_glyphs = match font.maxp().map_err(crate::audit::ruby::check_error)? {
                 Some(m) => u64::from(m.num_glyphs),
                 None => 0,
             };
@@ -86,11 +86,11 @@ pub fn run(font: &Font<'_>) -> Result<Vec<Issue>, CheckError> {
     if font.has_table("hhea") && font.has_table("maxp") {
         let hhea = font
             .hhea()
-            .map_err(super::rubyfmt::sfnt_err)?
+            .map_err(crate::audit::ruby::check_error)?
             .ok_or_else(|| nil_method("number_of_h_metrics"))?;
         let maxp = font
             .maxp()
-            .map_err(super::rubyfmt::sfnt_err)?
+            .map_err(crate::audit::ruby::check_error)?
             .ok_or_else(|| nil_method("num_glyphs"))?;
         let (metrics, glyphs) = (hhea.number_of_h_metrics, maxp.num_glyphs);
         if !(metrics > 0 && metrics <= glyphs) {

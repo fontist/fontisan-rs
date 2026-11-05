@@ -262,6 +262,36 @@ fn build_sorted(flavor: u32, tables: &[([u8; 4], Vec<u8>)]) -> R<Vec<u8>> {
     Ok(out)
 }
 
+/// The `Woff2Header` fields the `woff2_validation` check reads.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Woff2Header {
+    pub signature: u32,
+    pub flavor: u32,
+    pub reserved: u16,
+    pub total_sfnt_size: u32,
+    pub total_compressed_size: u32,
+    pub major_version: u16,
+    pub meta_offset: u32,
+    pub meta_length: u32,
+    pub meta_orig_length: u32,
+}
+
+impl Woff2Header {
+    pub(crate) fn parse(data: &[u8]) -> R<Self> {
+        Ok(Self {
+            signature: be32(data, 0)?,
+            flavor: be32(data, 4)?,
+            reserved: be16(data, 14)?,
+            total_sfnt_size: be32(data, 16)?,
+            total_compressed_size: be32(data, 20)?,
+            major_version: be16(data, 24)?,
+            meta_offset: be32(data, 28)?,
+            meta_length: be32(data, 32)?,
+            meta_orig_length: be32(data, 36)?,
+        })
+    }
+}
+
 /// A single-font WOFF2 as `Woff2Font.from_file` lays it out in memory.
 pub(crate) fn single(data: &[u8]) -> R<Vec<u8>> {
     let flavor = be32(data, 4)?;

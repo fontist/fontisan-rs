@@ -1,7 +1,7 @@
 //! `naming_consistency` (Ruby `NamingConsistencyCheck`): PostScript-name prefix,
 //! full-name composition, and standard subfamily names.
 
-use super::rubyfmt::required;
+use crate::audit::ruby::need;
 use crate::audit::types::{CheckError, Issue, Severity};
 use crate::sfnt::{Font, Name};
 
@@ -37,7 +37,7 @@ pub fn run(font: &Font<'_>) -> Result<Vec<Issue>, CheckError> {
     if !font.has_table("name") {
         return Ok(Vec::new());
     }
-    let name = required(font.name(), "english_name")?;
+    let name = need(font.name(), "english_name")?;
     let mut issues = Vec::new();
 
     let family = english(&name, FAMILY);

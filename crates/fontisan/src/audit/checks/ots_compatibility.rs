@@ -3,7 +3,7 @@
 //! count, English family/PostScript names, Unicode cmap, OS/2 classes, outlines).
 //! Any table that fails to parse raises, aborting the whole check (a fatal issue).
 
-use super::rubyfmt::{fixed, required, ruby_float};
+use crate::audit::ruby::{fixed, float_to_s, need};
 use crate::audit::types::{CheckError, Issue, Severity};
 use crate::sfnt::Font;
 
@@ -40,7 +40,7 @@ fn check_head(font: &Font<'_>, out: &mut Vec<Issue>) -> Result<(), CheckError> {
         out.push(missing("head"));
         return Ok(());
     }
-    let head = required(font.head(), "magic_number")?;
+    let head = need(font.head(), "magic_number")?;
     if head.magic_number != HEAD_MAGIC {
         out.push(
             Issue::new(
@@ -75,7 +75,7 @@ fn check_post(font: &Font<'_>, out: &mut Vec<Issue>) -> Result<(), CheckError> {
         out.push(missing("post"));
         return Ok(());
     }
-    let post = required(font.post(), "version")?;
+    let post = need(font.post(), "version")?;
     let version = fixed(post.version_raw);
     if !VALID_POST_VERSIONS.contains(&version) {
         out.push(
@@ -84,7 +84,7 @@ fn check_post(font: &Font<'_>, out: &mut Vec<Issue>) -> Result<(), CheckError> {
                 Severity::Error,
                 format!(
                     "OTS: post.version is {} but must be one of 1.0, 2.0, 2.5, 3.0, 4.0",
-                    ruby_float(version)
+                    float_to_s(version)
                 ),
             )
             .at("post.version"),
@@ -98,7 +98,7 @@ fn check_maxp(font: &Font<'_>, out: &mut Vec<Issue>) -> Result<(), CheckError> {
         out.push(missing("maxp"));
         return Ok(());
     }
-    let n = u32::from(required(font.maxp(), "num_glyphs")?.num_glyphs);
+    let n = u32::from(need(font.maxp(), "num_glyphs")?.num_glyphs);
     if n > MAX_GLYPHS {
         out.push(
             Issue::new(
@@ -117,7 +117,7 @@ fn check_name(font: &Font<'_>, out: &mut Vec<Issue>) -> Result<(), CheckError> {
         out.push(missing("name"));
         return Ok(());
     }
-    let name = required(font.name(), "english_name")?;
+    let name = need(font.name(), "english_name")?;
     if name.english_name(1).unwrap_or_default().is_empty() {
         out.push(
             Issue::new(
@@ -146,7 +146,7 @@ fn check_cmap(font: &Font<'_>, out: &mut Vec<Issue>) -> Result<(), CheckError> {
         out.push(missing("cmap"));
         return Ok(());
     }
-    let cmap = required(font.cmap(), "unicode_mappings")?;
+    let cmap = need(font.cmap(), "unicode_mappings")?;
     if cmap.codepoints().is_empty() {
         out.push(
             Issue::new(
@@ -165,7 +165,7 @@ fn check_os2(font: &Font<'_>, out: &mut Vec<Issue>) -> Result<(), CheckError> {
         out.push(missing("OS/2"));
         return Ok(());
     }
-    let os2 = required(font.os2(), "us_weight_class")?;
+    let os2 = need(font.os2(), "us_weight_class")?;
     let w = os2.us_weight_class;
     if !(1..=1000).contains(&w) {
         out.push(
