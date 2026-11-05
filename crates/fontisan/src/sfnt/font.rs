@@ -2,6 +2,7 @@ use super::cmap::Cmap;
 use super::cursor::Cursor;
 use super::error::{Error, ErrorClass};
 use super::tables::{Head, Hhea, Maxp, Name, Os2, Post};
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 const UNKNOWN_FORMAT: &str =
@@ -198,7 +199,8 @@ type Range = Option<(usize, usize)>;
 /// A parsed sfnt face over borrowed bytes (a single font or one member of a
 /// collection). `bytes` may be a WOFF decoder's output (card 1e).
 pub struct Font<'a> {
-    bytes: &'a [u8],
+    /// Borrowed for sfnt input; owned when WOFF/WOFF2 input was decoded.
+    bytes: Cow<'a, [u8]>,
     format: Format,
     options: Options,
     pub sfnt_version: u32,
@@ -241,6 +243,9 @@ impl<'a> Font<'a> {
                 f.read_table_data(false)?;
                 Ok(f)
             }
+            Format::Woff | Format::Woff2 | Format::Woff2Collection => {
+                Self::load_woff(bytes, format, font_index, options)
+            }
             other => Err(Error::new(
                 ErrorClass::Unsupported,
                 format!("{} is not read by the native sfnt engine", other.as_str()),
@@ -248,13 +253,43 @@ impl<'a> Font<'a> {
         }
     }
 
+    /// WOFF, WOFF2 and WOFF2 collections: decode with the 1e decoders, then read
+    /// the decoded sfnt (or one member of the decoded `ttcf`) like any other.
+    fn load_woff(
+        bytes: &[u8],
+        format: Format,
+        font_index: usize,
+        options: Options,
+    ) -> Result<Self, Error> {
+        let decoded = match format {
+            Format::Woff => crate::woff::decode_woff(bytes)
+                .map_err(|e| Error::new(ErrorClass::InvalidFont, e.to_string()))?,
+            Format::Woff2 => super::woff2_view::single(bytes)?,
+            _ => match super::woff2_view::collection(bytes, font_index)? {
+                Ok(face) => face,
+                Err(count) => {
+                    return Err(Error::new(
+                        ErrorClass::InvalidFont,
+                        format!(
+                            "Font index {font_index} out of range (collection has {count} fonts)"
+                        ),
+                    ));
+                }
+            },
+        };
+        let mut f = Self::read_directory(Cow::Owned(decoded), 0, format, options)?;
+        f.read_table_data(options.lazy && !format.is_collection())?;
+        Ok(f)
+    }
+
     fn read_directory(
-        bytes: &'a [u8],
+        bytes: impl Into<Cow<'a, [u8]>>,
         at: usize,
         format: Format,
         options: Options,
     ) -> Result<Self, Error> {
-        let mut c = Cursor::new(bytes, at);
+        let bytes = bytes.into();
+        let mut c = Cursor::new(&bytes, at);
         let sfnt_version = c.u32()?;
         let num_tables = c.u16()?;
         c.u16()?; // search_range
@@ -295,7 +330,7 @@ impl<'a> Font<'a> {
         if lazy {
             return Ok(());
         }
-        if self.options.mode == LoadingMode::Full {
+        if self.gating_mode() == LoadingMode::Full {
             for e in &self.entries {
                 let r = self.read_at(e.offset as usize, e.length as usize);
                 self.eager.insert(e.tag, r);
@@ -355,6 +390,16 @@ impl<'a> Font<'a> {
     pub fn format(&self) -> Format {
         self.format
     }
+    /// The mode that gates tables. Ruby's `WoffFont` accepts `mode:` but never
+    /// consults it (measured: every WOFF 1 golden is identical in all four
+    /// combinations, with every table readable); WOFF2 honours it.
+    fn gating_mode(&self) -> LoadingMode {
+        if self.format == Format::Woff {
+            LoadingMode::Full
+        } else {
+            self.options.mode
+        }
+    }
     pub fn mode(&self) -> LoadingMode {
         self.options.mode
     }
@@ -374,12 +419,11 @@ impl<'a> Font<'a> {
 
     /// The table bytes Ruby holds after `font.table(tag)`: short when the table
     /// runs past EOF, `None` when it starts past EOF or the mode gates it out.
-    pub fn table_data(&self, tag: &str) -> Option<&'a [u8]> {
-        if !self.options.mode.allows(tag) {
+    pub fn table_data(&self, tag: &str) -> Option<&[u8]> {
+        if !self.gating_mode().allows(tag) {
             return None;
         }
-        let range = if self.options.lazy && self.format != Format::Ttc && self.format != Format::Otc
-        {
+        let range = if self.options.lazy && !self.format.is_collection() {
             let e = self.entries.iter().find(|e| e.tag_str() == tag)?;
             self.read_at(e.offset as usize, e.length as usize)
         } else {
@@ -391,11 +435,11 @@ impl<'a> Font<'a> {
 
     /// Ruby's mode check in `SfntFont#table`: `Err(ArgumentError)` for a
     /// present table the mode gates out, `Ok(None)` for an absent one.
-    fn available(&self, tag: &str) -> Result<Option<Option<&'a [u8]>>, Error> {
+    fn available(&self, tag: &str) -> Result<Option<Option<&[u8]>>, Error> {
         if !self.has_table(tag) {
             return Ok(None);
         }
-        if !self.options.mode.allows(tag) {
+        if !self.gating_mode().allows(tag) {
             return Err(Error::new(
                 ErrorClass::Argument,
                 format!(

@@ -7,6 +7,8 @@
 mod woff1;
 mod woff2;
 
+pub(crate) use woff2::{KNOWN_TAGS, brotli_inflate, triplet_decode};
+
 use std::fmt;
 
 pub use woff1::decode_woff;

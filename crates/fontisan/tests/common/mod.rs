@@ -1,5 +1,7 @@
 //! Shared helpers for the 1b substrate spike tests (not production code).
 #![allow(dead_code)]
+pub mod variation_json;
+
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};

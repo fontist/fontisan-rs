@@ -14,7 +14,7 @@ const TAG_HMTX: u32 = u32::from_be_bytes(*b"hmtx");
 const TAG_HHEA: u32 = u32::from_be_bytes(*b"hhea");
 const TAG_HEAD: u32 = u32::from_be_bytes(*b"head");
 
-const KNOWN_TAGS: [&[u8; 4]; 63] = [
+pub(crate) const KNOWN_TAGS: [&[u8; 4]; 63] = [
     b"cmap", b"head", b"hhea", b"hmtx", b"maxp", b"name", b"OS/2", b"post", b"cvt ", b"fpgm",
     b"glyf", b"loca", b"prep", b"CFF ", b"VORG", b"EBDT", b"EBLC", b"gasp", b"hdmx", b"kern",
     b"LTSH", b"PCLT", b"VDMX", b"vhea", b"vmtx", b"BASE", b"GDEF", b"GPOS", b"GSUB", b"EBSC",
@@ -262,10 +262,10 @@ fn put16(v: &mut Vec<u8>, x: i32) {
     v.extend_from_slice(&(x as u16).to_be_bytes());
 }
 
-struct Point {
-    x: i32,
-    y: i32,
-    on_curve: bool,
+pub(crate) struct Point {
+    pub(crate) x: i32,
+    pub(crate) y: i32,
+    pub(crate) on_curve: bool,
 }
 
 fn with_sign(flag: u8, base: i32) -> i32 {
@@ -274,7 +274,7 @@ fn with_sign(flag: u8, base: i32) -> i32 {
 
 /// Decode `n` points from the flag stream and triplet stream. Returns the
 /// points and the number of triplet bytes consumed.
-fn triplet_decode(flags: &[u8], input: &[u8], n: usize) -> Result<(Vec<Point>, usize)> {
+pub(crate) fn triplet_decode(flags: &[u8], input: &[u8], n: usize) -> Result<(Vec<Point>, usize)> {
     if n > input.len() {
         return err("too many points for glyph stream");
     }
@@ -841,7 +841,7 @@ fn find_tag(all: &[Table], idxs: &[usize], tag: u32) -> Option<usize> {
     idxs.iter().copied().find(|&i| all[i].tag == tag)
 }
 
-fn brotli_inflate(src: &[u8], expected: usize) -> Result<Vec<u8>> {
+pub(crate) fn brotli_inflate(src: &[u8], expected: usize) -> Result<Vec<u8>> {
     let mut dec = brotli_decompressor::Decompressor::new(src, 4096).take(expected as u64 + 1);
     let mut out = Vec::new();
     dec.read_to_end(&mut out)

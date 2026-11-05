@@ -91,14 +91,9 @@ fn corpus_pfa_is_unrecognised_exactly_like_ruby() {
 }
 
 #[test]
-fn woff_and_type1_are_unsupported_not_misparsed() {
+fn dfont_and_type1_are_unsupported_not_misparsed() {
     let Some(corpus) = corpus() else { return };
-    for name in [
-        "TestWOFF.woff",
-        "TestWOFF2.woff2",
-        "TestT1-Regular.pfb",
-        "TestDFONT.dfont",
-    ] {
+    for name in ["TestT1-Regular.pfb", "TestDFONT.dfont"] {
         let bytes = std::fs::read(font_path(&corpus, name)).unwrap();
         let e = Font::from_bytes(&bytes)
             .err()

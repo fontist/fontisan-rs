@@ -10,6 +10,7 @@ mod outlines;
 mod standard_names;
 mod tables;
 mod variations;
+mod woff2_view;
 
 pub use cmap::Cmap;
 pub use error::{Error, ErrorClass};
