@@ -1,0 +1,83 @@
+[package]
+name = "fontisan-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Own workspace (like xtask): libfuzzer-sys and its nightly-only build never
+# enter the engine graph.
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+fontisan = { path = "../crates/fontisan" }
+
+[profile.release]
+debug = 1
+panic = "unwind"
+
+[[bin]]
+name = "font_load"
+path = "fuzz_targets/font_load.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "font_tables"
+path = "fuzz_targets/font_tables.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "font_outlines"
+path = "fuzz_targets/font_outlines.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "font_variations"
+path = "fuzz_targets/font_variations.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "font_layout"
+path = "fuzz_targets/font_layout.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "woff1"
+path = "fuzz_targets/woff1.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "woff2"
+path = "fuzz_targets/woff2.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "woff2_collection"
+path = "fuzz_targets/woff2_collection.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "audit_loaded"
+path = "fuzz_targets/audit_loaded.rs"
+test = false
+doc = false
+bench = false

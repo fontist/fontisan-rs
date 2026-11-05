@@ -7,6 +7,9 @@ use super::error::Error;
 use read_fonts::tables::cmap::CmapSubtable;
 use read_fonts::{FontData, FontRead};
 
+const MAX_CODEPOINT: u32 = 0x10_FFFF;
+const MAX_ENTRIES: usize = MAX_CODEPOINT as usize + 1;
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Cmap {
     pub version: u16,
@@ -99,13 +102,40 @@ impl Cmap {
         let Ok(table) = CmapSubtable::read(FontData::new(sub)) else {
             return Vec::new();
         };
+        // A format 12 group may claim 0..=0xFFFF_FFFF; walking it unbounded hangs and
+        // exhausts memory. No valid cmap maps more than the 0x110000 Unicode scalars,
+        // so stop after that many entries and past U+10FFFF (valid fonts: unchanged).
         let mut m: Vec<(u32, u32)> = table
             .iter()
+            .take(MAX_ENTRIES)
+            .take_while(|(c, _)| *c <= MAX_CODEPOINT)
             .filter(|(_, g)| g.to_u32() != 0)
             .map(|(c, g)| (c, g.to_u32()))
             .collect();
         m.sort_unstable();
         m.dedup_by_key(|(c, _)| *c);
         m
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// fuzz finding (1j-parsers): one format 12 group spanning the whole u32 range
+    /// made `codepoints()` run for minutes and allocate without bound.
+    #[test]
+    fn format_12_group_spanning_u32_is_bounded() {
+        let mut raw = vec![0, 0, 0, 1, 0, 3, 0, 10, 0, 0, 0, 12];
+        raw.extend_from_slice(&[0, 12, 0, 0]); // format 12, reserved
+        raw.extend_from_slice(&28u32.to_be_bytes()); // length
+        raw.extend_from_slice(&0u32.to_be_bytes()); // language
+        raw.extend_from_slice(&1u32.to_be_bytes()); // one group
+        for v in [0u32, u32::MAX, 1] {
+            raw.extend_from_slice(&v.to_be_bytes());
+        }
+        let cps = Cmap::parse(&raw).unwrap().codepoints();
+        assert_eq!(cps.len(), 0x11_0000);
+        assert_eq!(cps.last(), Some(&0x10_FFFF));
     }
 }

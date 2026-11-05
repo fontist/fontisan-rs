@@ -85,3 +85,41 @@ jobs:
         run: >
           cargo +nightly test -Zbuild-std --target x86_64-unknown-linux-gnu
           -p fontisan --features ffi --test ffi_abi --locked
+
+  # Card 1j-parsers: coverage-guided fuzzing of every binary parser entry, one matrix leg
+  # per target (fuzz/fuzz_targets/*), each on a fixed time budget. A crash or hang fails the
+  # leg and uploads the reproducer. The same bodies also run on stable as
+  # crates/fontisan/tests/fuzz_mutation.rs. C ABI targets are card 1j-abi.
+  fuzz:
+    name: fuzz ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [font_load, font_tables, font_outlines, font_variations, font_layout, woff1, woff2, woff2_collection, audit_loaded]
+    env:
+      FUZZ_SECONDS: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly # libFuzzer instrumentation needs nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - run: cargo install cargo-fuzz --version 0.13.1 --locked
+      - run: cargo xtask corpus-fetch
+      - name: seed corpus (committed seeds + small corpus fonts)
+        run: |
+          mkdir -p fuzz/corpus/${{ matrix.target }}
+          cp fuzz/seeds/* fuzz/corpus/${{ matrix.target }}/
+          find .corpus/fontisan/corpus/fonts -type f -size -200k -exec cp -n {} fuzz/corpus/${{ matrix.target }}/ \;
+      - name: fuzz ${{ matrix.target }} for ${{ env.FUZZ_SECONDS }}s
+        # -timeout: a single input running > 10 s is a hang finding; -rss_limit_mb catches runaway allocation.
+        run: >
+          cargo +nightly fuzz run ${{ matrix.target }} --
+          -max_total_time=${{ env.FUZZ_SECONDS }} -max_len=262144 -timeout=10 -rss_limit_mb=2048
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-crash-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}

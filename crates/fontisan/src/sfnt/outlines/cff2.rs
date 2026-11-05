@@ -90,6 +90,15 @@ pub(super) fn glyphs(data: &[u8]) -> Result<Vec<&[u8]>, Error> {
     if count == 0 {
         return Ok(vec![]);
     }
+    // Every charstring needs at least one offset byte, so more entries than bytes
+    // cannot be real. Without this, offSize 0 (zero-width reads always succeed)
+    // plus a huge count loops ~4 billion times (fuzz finding, 1j-parsers).
+    if count > data.len() as i64 {
+        return Err(Error::new(
+            ErrorClass::Truncated,
+            format!("{count} CharStrings in a {} byte table", data.len()),
+        ));
+    }
     let off_size = be(slice(data, offset + 4, 1)?);
     let read = |i: i64| -> Result<i64, Error> {
         Ok(be(slice(data, offset + 5 + i * off_size, off_size)?))
@@ -101,4 +110,21 @@ pub(super) fn glyphs(data: &[u8]) -> Result<Vec<&[u8]>, Error> {
             slice(data, base + a, b - a)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// fuzz finding: CharStrings INDEX with count 0xFFFFFFFF and offSize 0 never ended.
+    #[test]
+    fn huge_count_with_zero_off_size_fails_fast() {
+        // Header: major 2, minor 0, headerSize 5, topDictLength 3. Top DICT at 5:
+        // operand 8, operand 8, operator 17 (CharStrings offset 8, where the INDEX starts).
+        let mut d = vec![2, 0, 5, 0, 3, 139 + 8, 139 + 8, 17];
+        d.extend_from_slice(&u32::MAX.to_be_bytes()); // count
+        d.push(0); // offSize 0
+        d.extend_from_slice(&[0; 8]);
+        assert_eq!(glyphs(&d).unwrap_err().class, ErrorClass::Truncated);
+    }
 }
