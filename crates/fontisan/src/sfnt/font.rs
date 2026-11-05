@@ -165,6 +165,10 @@ pub fn detect_format(b: &[u8]) -> Option<Format> {
 pub fn face_count(b: &[u8]) -> Option<usize> {
     match detect_format(b)? {
         Format::Ttc | Format::Otc => scan_collection(b).map(|(o, _)| o.len()),
+        // An out-of-range index makes the view report the member count.
+        Format::Woff2Collection => super::woff2_view::collection(b, usize::MAX)
+            .ok()
+            .and_then(|r| r.err()),
         _ => Some(1),
     }
 }
@@ -415,6 +419,27 @@ impl<'a> Font<'a> {
     }
     pub fn has_table(&self, tag: &str) -> bool {
         self.entries.iter().any(|e| e.tag_str() == tag)
+    }
+
+    /// The facade's `raw_table` (`font.table_data[tag]`): Ruby's WOFF/WOFF2 fonts
+    /// decompress every table up front, so their raw store ignores the loading
+    /// mode (measured: source-sans-3-regular-otf-woff2 has CFF outlines in the
+    /// metadata goldens); plain sfnt holds only what the mode loaded.
+    pub(crate) fn raw_table_data(&self, tag: &str) -> Option<&[u8]> {
+        // WOFF2 collection members are rebuilt through the mode-gated sfnt path
+        // (woff2-collection-4members has no outlines in its metadata goldens).
+        if !matches!(self.format, Format::Woff | Format::Woff2) {
+            return self.table_data(tag);
+        }
+        // WOFF2 rebuilds the transformed glyf/loca only when the mode loads them
+        // (fonttools-test-woff2 has no glyf outlines in its metadata goldens).
+        if self.format != Format::Woff && (tag == "glyf" || tag == "loca") {
+            return self.table_data(tag);
+        }
+        // The decoded store holds every table whatever the eager/lazy setting.
+        let e = self.entries.iter().find(|e| e.tag_str() == tag)?;
+        let (o, l) = self.read_at(e.offset as usize, e.length as usize)?;
+        Some(&self.bytes[o..o + l])
     }
 
     /// The table bytes Ruby holds after `font.table(tag)`: short when the table

@@ -82,13 +82,13 @@ fn hex(b: &[u8]) -> String {
     })
 }
 
-impl<'a> Font<'a> {
+impl Font<'_> {
     /// The font's glyph outlines, or `Ok(None)` when it has none the loading
     /// mode lets us read. glyf+loca win over CFF, which wins over CFF2 (the
     /// facade's order). A malformed table is an `Err` shaped like Ruby's.
     pub fn outlines(&self) -> Result<Option<Outlines<'_>>, Error> {
-        let glyf = self.table_data("glyf");
-        let loca = self.table_data("loca");
+        let glyf = self.raw_table_data("glyf");
+        let loca = self.raw_table_data("loca");
         if let (Some(glyf), Some(loca)) = (glyf, loca) {
             let head = self
                 .head()?
@@ -102,13 +102,13 @@ impl<'a> Font<'a> {
                 glyphs,
             }));
         }
-        if let Some(data) = self.table_data("CFF ") {
+        if let Some(data) = self.raw_table_data("CFF ") {
             return Ok(Some(Outlines {
                 kind: OutlineKind::Cff,
                 glyphs: cff::glyphs(data)?,
             }));
         }
-        if let Some(data) = self.table_data("CFF2") {
+        if let Some(data) = self.raw_table_data("CFF2") {
             return Ok(Some(Outlines {
                 kind: OutlineKind::Cff2,
                 glyphs: cff2::glyphs(data)?,
