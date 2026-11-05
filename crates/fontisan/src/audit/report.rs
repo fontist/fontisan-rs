@@ -220,30 +220,39 @@ pub fn build_report(
     Ok(r)
 }
 
+/// Where an audit failed: Ruby's `load_font` wraps load failures, report building raises as is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stage {
+    Load,
+    Report,
+}
+
 /// `AuditCommand#run`: one report per face (collections audit every member),
-/// each face loaded `full`, eager. WOFF/WOFF2/dfont/Type 1 are not read here.
+/// each face loaded `full`, eager. WOFF/WOFF2 are decoded by the loader;
+/// dfont/Type 1 are `Unsupported`.
 pub fn audit(bytes: &[u8], source_file: &str, validate: bool) -> Result<Vec<Report>, Error> {
+    audit_staged(bytes, source_file, validate).map_err(|(e, _)| e)
+}
+
+/// [`audit`], also saying at which stage a failure happened.
+pub fn audit_staged(
+    bytes: &[u8],
+    source_file: &str,
+    validate: bool,
+) -> Result<Vec<Report>, (Error, Stage)> {
     let opts = Options {
         mode: LoadingMode::Full,
         lazy: false,
     };
     let is_collection = detect_format(bytes).is_some_and(|f| f.is_collection());
+    let one = |i: usize, index: Option<usize>, num: usize| {
+        let face = Font::load(bytes, i, opts).map_err(|e| (e, Stage::Load))?;
+        build_report(&face, bytes, source_file, index, num, validate)
+            .map_err(|e| (e, Stage::Report))
+    };
     if !is_collection {
-        let face = Font::load(bytes, 0, opts)?;
-        return Ok(vec![build_report(
-            &face,
-            bytes,
-            source_file,
-            None,
-            1,
-            validate,
-        )?]);
+        return Ok(vec![one(0, None, 1)?]);
     }
     let num = face_count(bytes).unwrap_or(0);
-    (0..num)
-        .map(|i| {
-            let face = Font::load(bytes, i, opts)?;
-            build_report(&face, bytes, source_file, Some(i), num, validate)
-        })
-        .collect()
+    (0..num).map(|i| one(i, Some(i), num)).collect()
 }

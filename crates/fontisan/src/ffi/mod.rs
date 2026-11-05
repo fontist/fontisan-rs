@@ -8,11 +8,13 @@
 //!   This relies on `panic = "unwind"` in the release profile.
 #![allow(unsafe_code)]
 
+mod read_ops;
 mod result;
 
 use std::any::Any;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
+pub use read_ops::{AUDIT_FLAG_VALIDATE, READ_FLAG_LAZY, READ_FLAG_METADATA};
 pub use result::{FontisanErrorRow, FontisanResult};
 
 /// "FSAN" as little-endian bytes.
@@ -35,6 +37,10 @@ pub enum FontisanStatus {
     InvalidArgument = 7,
     /// Conversion or extract failed; the message is `<ruby class>: <message>`.
     ConvertFailed = 8,
+    /// `read` / `audit` failed; the message is JSON `{"class","message","causes"}`.
+    ReadFailed = 9,
+    /// dfont / Type 1: not read natively; the caller serves the file itself.
+    Unsupported = 10,
 }
 
 /// Leads every ABI struct.
@@ -116,6 +122,15 @@ pub const OP_INSTANCE: u32 = 7;
 /// N u32 BE glyph ids, then the font bytes. Payload: the subset font. Failure
 /// status `ConvertFailed`, message `<ruby class>: <message>`.
 pub const OP_SUBSET: u32 = 6;
+/// Read ops (card 1g-abi); payloads are packed JSON rows, see `read_ops`.
+/// Read: `input` = font bytes; `flags` = [`READ_FLAG_METADATA`] | [`READ_FLAG_LAZY`].
+pub const OP_READ: u32 = 8;
+/// Audit: `input` = u32 BE name length, source file name, font bytes; `flags` = [`AUDIT_FLAG_VALIDATE`].
+pub const OP_AUDIT: u32 = 9;
+/// Scan a file or whole directory (recursive, sorted): `input` = UTF-8 path.
+pub const OP_SCAN: u32 = 10;
+/// Audit every font file under a directory: `input` = UTF-8 path; `flags` = [`AUDIT_FLAG_VALIDATE`].
+pub const OP_AUDIT_DIR: u32 = 11;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -333,6 +348,25 @@ unsafe fn dispatch(req: *const FontisanRequest) -> Result<Vec<u8>, FfiError> {
                 .collect();
             crate::subset::subset(&input[ids_end..], &gids, profile)
                 .map_err(|e| FfiError::new(FontisanStatus::ConvertFailed, e.to_string()))
+        }
+        OP_READ | OP_AUDIT | OP_SCAN | OP_AUDIT_DIR => {
+            if req.input.is_null() && req.input_len != 0 {
+                return Err(FfiError::new(
+                    FontisanStatus::InvalidArgument,
+                    "input is null with non-zero length",
+                ));
+            }
+            let input: &[u8] = if req.input_len == 0 {
+                &[]
+            } else {
+                unsafe { std::slice::from_raw_parts(req.input, req.input_len) }
+            };
+            match req.op {
+                OP_READ => read_ops::read(input, req.flags),
+                OP_AUDIT => read_ops::audit(input, req.flags),
+                OP_SCAN => read_ops::scan(input),
+                _ => read_ops::audit_dir(input, req.flags),
+            }
         }
         op => Err(FfiError::new(
             FontisanStatus::UnknownOp,

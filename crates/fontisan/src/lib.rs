@@ -10,6 +10,8 @@ pub mod audit;
 pub mod convert;
 pub mod indexability;
 pub mod instance;
+pub mod json;
+pub mod read;
 pub mod scan;
 pub mod sfnt;
 pub mod subset;

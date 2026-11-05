@@ -47,3 +47,7 @@ workspace = true
 [[test]]
 name = "ffi_leak"
 required-features = ["ffi"]
+
+[[test]]
+name = "ffi_read_ops"
+required-features = ["ffi"]

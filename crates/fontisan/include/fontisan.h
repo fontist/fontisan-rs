@@ -21,7 +21,12 @@ enum {
   FONTISAN_E_UNKNOWN_OP = 5,
   FONTISAN_E_PANIC = 6,
   FONTISAN_E_INVALID_ARG = 7,
-  FONTISAN_E_CONVERT_FAILED = 8
+  FONTISAN_E_CONVERT_FAILED = 8,
+  /* read / audit failed: the error message is JSON {"class","message","causes":[{"class","message"}]},
+   * the Ruby error surface (audit load failures are wrapped as BaseCommand does). */
+  FONTISAN_E_READ_FAILED = 9,
+  /* dfont / Type 1: not read natively; serve the file with the Ruby engine. */
+  FONTISAN_E_UNSUPPORTED = 10
 };
 
 #define FONTISAN_OP_ECHO 0u
@@ -47,6 +52,26 @@ enum {
  * font. Failure message is "<ruby class>: <message>" with status
  * FONTISAN_E_CONVERT_FAILED. */
 #define FONTISAN_OP_SUBSET 6u
+
+/* Read-side ops. Every success payload is "packed rows": u32 BE row count, then per row a u32 BE
+ * byte length and that many bytes of UTF-8 JSON (the facade's canonical documents).
+ *
+ * READ   input = font bytes; flags: FONTISAN_READ_METADATA (else full), FONTISAN_READ_LAZY.
+ *        One row per face (Reference.read). Fails whole on the first error.
+ * AUDIT  input = u32 BE name length, source file name, font bytes; flags: FONTISAN_AUDIT_VALIDATE.
+ *        One row per face (audit report; nil and empty lists omitted).
+ * SCAN   input = UTF-8 file or directory path (directory: recursive, sorted by path, extensions
+ *        ttf otf ttc otc woff woff2 dfont pfb pfa). One row per scan row; status "unsupported"
+ *        rows (dfont, Type 1) are for the caller to serve.
+ * AUDIT_DIR  same input; flags: FONTISAN_AUDIT_VALIDATE. One row per file:
+ *        {path, status ok|unsupported|error, reports | error:{class,message,causes}}. */
+#define FONTISAN_OP_READ 8u
+#define FONTISAN_OP_AUDIT 9u
+#define FONTISAN_OP_SCAN 10u
+#define FONTISAN_OP_AUDIT_DIR 11u
+#define FONTISAN_READ_METADATA 1u
+#define FONTISAN_READ_LAZY 2u
+#define FONTISAN_AUDIT_VALIDATE 1u
 
 typedef struct {
   uint32_t magic;

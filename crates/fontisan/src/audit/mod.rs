@@ -2,11 +2,13 @@
 //! lives in `checks/<name>.rs` as `pub fn run(font) -> Result<Vec<Issue>, CheckError>`.
 
 pub mod checks;
+mod json;
 pub mod report;
 pub(crate) mod ruby;
 pub mod types;
 
-pub use report::{Axis, Report, Summary, audit, build_report};
+pub use json::{command_error_json, dir_row};
+pub use report::{Axis, Report, Stage, Summary, audit, audit_staged, build_report};
 pub use types::{CheckError, CheckFn, Issue, Severity};
 
 use crate::sfnt::Font;

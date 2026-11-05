@@ -8,6 +8,7 @@
 //! input, is reproduced, failures included: what fontist would raise is recorded
 //! in the row's [`RowErrors`], never raised.
 use crate::indexability::{self, IndexabilityReport};
+pub use crate::json::Json;
 use crate::sfnt::{Error, Font, Format, LoadingMode, Name, Options, detect_format, face_count};
 use sha2::{Digest, Sha256};
 
@@ -409,73 +410,7 @@ fn instances_of(font: &Font<'_>) -> Result<Vec<Instance>, Error> {
         .collect())
 }
 
-// ---- JSON -------------------------------------------------------------------
-
-/// A minimal JSON value, so rows can be rendered without a serde dependency.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Json {
-    Null,
-    Bool(bool),
-    Int(i64),
-    Str(String),
-    Arr(Vec<Json>),
-    Obj(Vec<(&'static str, Json)>),
-}
-
-impl Json {
-    pub fn render(&self) -> String {
-        let mut out = String::new();
-        self.write(&mut out);
-        out
-    }
-
-    fn write(&self, out: &mut String) {
-        match self {
-            Self::Null => out.push_str("null"),
-            Self::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
-            Self::Int(i) => out.push_str(&i.to_string()),
-            Self::Str(s) => write_str(s, out),
-            Self::Arr(a) => {
-                out.push('[');
-                for (i, v) in a.iter().enumerate() {
-                    if i > 0 {
-                        out.push(',');
-                    }
-                    v.write(out);
-                }
-                out.push(']');
-            }
-            Self::Obj(o) => {
-                out.push('{');
-                for (i, (k, v)) in o.iter().enumerate() {
-                    if i > 0 {
-                        out.push(',');
-                    }
-                    write_str(k, out);
-                    out.push(':');
-                    v.write(out);
-                }
-                out.push('}');
-            }
-        }
-    }
-}
-
-fn write_str(s: &str, out: &mut String) {
-    out.push('"');
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-}
+// ---- JSON ---------------------------------------------------------------------
 
 fn opt_str(s: &Option<String>) -> Json {
     s.as_ref().map_or(Json::Null, |s| Json::Str(s.clone()))
@@ -600,4 +535,48 @@ impl Row {
             ),
         ])
     }
+}
+
+/// Extensions `scan` / `audit_dir` pick up in a directory (case-insensitive).
+pub const FONT_EXTENSIONS: [&str; 9] = [
+    "ttf", "otf", "ttc", "otc", "woff", "woff2", "dfont", "pfb", "pfa",
+];
+
+/// Font files under `root`, recursively, sorted by path (byte order). A file
+/// `root` yields itself. Directory symlinks are not followed; non-font
+/// extensions are skipped.
+pub fn font_files(root: &std::path::Path) -> std::io::Result<Vec<std::path::PathBuf>> {
+    fn walk(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) -> std::io::Result<()> {
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            let kind = entry.file_type()?;
+            if kind.is_dir() {
+                walk(&path, out)?;
+            } else if (kind.is_file() || (kind.is_symlink() && path.is_file()))
+                && path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| FONT_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
+            {
+                out.push(path);
+            }
+        }
+        Ok(())
+    }
+    if !root.is_dir() {
+        return Ok(vec![root.to_path_buf()]);
+    }
+    let mut out = Vec::new();
+    walk(root, &mut out)?;
+    out.sort();
+    Ok(out)
+}
+
+/// `scan` over a file or a whole directory: every row of every font file.
+pub fn scan_dir(root: &std::path::Path) -> std::io::Result<Vec<Row>> {
+    Ok(font_files(root)?
+        .iter()
+        .flat_map(|p| scan_path(p))
+        .collect())
 }
