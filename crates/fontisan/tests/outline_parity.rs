@@ -236,7 +236,8 @@ fn glyf_short_and_long_loca_and_clipping() {
             (b"maxp", maxp(3)),
         ],
     );
-    let o = Font::from_bytes(&f).unwrap().outlines().unwrap().unwrap();
+    let font = Font::from_bytes(&f).unwrap();
+    let o = font.outlines().unwrap().unwrap();
     assert_eq!(o.glyphs, vec![&b"ABCD"[..], b"EF", b""]);
     let loca_short: Vec<u8> = [0u16, 1, 1, 2]
         .iter()
@@ -251,7 +252,8 @@ fn glyf_short_and_long_loca_and_clipping() {
             (b"maxp", maxp(3)),
         ],
     );
-    let o = Font::from_bytes(&f).unwrap().outlines().unwrap().unwrap();
+    let font = Font::from_bytes(&f).unwrap();
+    let o = font.outlines().unwrap().unwrap();
     assert_eq!(o.glyphs, vec![&b"AB"[..], b"", b"CD"]);
 }
 
@@ -343,7 +345,8 @@ fn cff1(charstrings: &[&[u8]]) -> Vec<u8> {
 fn cff_charstrings_and_errors() {
     let data = cff1(&[b"\x0e", b"abc", b""]);
     let f = sfnt(0x4F54544F, &[(b"CFF ", data.clone())]);
-    let o = Font::from_bytes(&f).unwrap().outlines().unwrap().unwrap();
+    let font = Font::from_bytes(&f).unwrap();
+    let o = font.outlines().unwrap().unwrap();
     assert_eq!(
         (o.kind, o.glyphs),
         (OutlineKind::Cff, vec![&b"\x0e"[..], b"abc", b""])
@@ -396,7 +399,8 @@ fn cff2(charstrings: &[&[u8]], count_override: Option<u32>) -> Vec<u8> {
 fn cff2_charstrings_use_the_uint32_count_and_truncation_is_reported() {
     let data = cff2(&[b"xy", b"", b"z"], None);
     let f = sfnt(0x4F54544F, &[(b"CFF2", data.clone())]);
-    let o = Font::from_bytes(&f).unwrap().outlines().unwrap().unwrap();
+    let font = Font::from_bytes(&f).unwrap();
+    let o = font.outlines().unwrap().unwrap();
     assert_eq!(
         (o.kind, o.glyphs),
         (OutlineKind::Cff2, vec![&b"xy"[..], b"", b"z"])

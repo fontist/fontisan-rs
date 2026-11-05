@@ -86,7 +86,7 @@ impl<'a> Font<'a> {
     /// The font's glyph outlines, or `Ok(None)` when it has none the loading
     /// mode lets us read. glyf+loca win over CFF, which wins over CFF2 (the
     /// facade's order). A malformed table is an `Err` shaped like Ruby's.
-    pub fn outlines(&self) -> Result<Option<Outlines<'a>>, Error> {
+    pub fn outlines(&self) -> Result<Option<Outlines<'_>>, Error> {
         let glyf = self.table_data("glyf");
         let loca = self.table_data("loca");
         if let (Some(glyf), Some(loca)) = (glyf, loca) {
