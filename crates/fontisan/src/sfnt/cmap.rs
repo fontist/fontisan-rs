@@ -75,6 +75,12 @@ impl Cmap {
 
     /// Sorted unique codepoints mapped to a nonzero glyph by the chosen subtable.
     pub fn codepoints(&self) -> Vec<u32> {
+        self.mappings().into_iter().map(|(c, _)| c).collect()
+    }
+
+    /// `Cmap#unicode_mappings`: (codepoint, glyph) pairs of the chosen subtable
+    /// with a nonzero glyph, sorted by codepoint, one pair per codepoint.
+    pub fn mappings(&self) -> Vec<(u32, u32)> {
         let recs = self.records();
         let pick = |p: u16, e: Option<u16>| {
             recs.iter()
@@ -93,13 +99,13 @@ impl Cmap {
         let Ok(table) = CmapSubtable::read(FontData::new(sub)) else {
             return Vec::new();
         };
-        let mut cps: Vec<u32> = table
+        let mut m: Vec<(u32, u32)> = table
             .iter()
             .filter(|(_, g)| g.to_u32() != 0)
-            .map(|(c, _)| c)
+            .map(|(c, g)| (c, g.to_u32()))
             .collect();
-        cps.sort_unstable();
-        cps.dedup();
-        cps
+        m.sort_unstable();
+        m.dedup_by_key(|(c, _)| *c);
+        m
     }
 }

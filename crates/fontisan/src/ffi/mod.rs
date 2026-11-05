@@ -111,6 +111,11 @@ pub const WOFF2_FLAG_TIMESTAMP: u32 = 1;
 /// (ttf/woff/woff2). Axes left out take their fvar default. Payload: the
 /// static sfnt, exactly as `Variable::Instancer#instance`.
 pub const OP_INSTANCE: u32 = 7;
+/// Subset by glyph id list (card 1i-subset). `input` = 16-byte prefix (u32 BE
+/// profile: 0 pdf, 1 web, 2 minimal; u32 BE glyph count N; 8 reserved bytes),
+/// N u32 BE glyph ids, then the font bytes. Payload: the subset font. Failure
+/// status `ConvertFailed`, message `<ruby class>: <message>`.
+pub const OP_SUBSET: u32 = 6;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -282,6 +287,51 @@ unsafe fn dispatch(req: *const FontisanRequest) -> Result<Vec<u8>, FfiError> {
                 })
                 .collect();
             crate::instance::instance(&input[list_end..], &coords)
+                .map_err(|e| FfiError::new(FontisanStatus::ConvertFailed, e.to_string()))
+        }
+        OP_SUBSET => {
+            if req.input.is_null() && req.input_len != 0 {
+                return Err(FfiError::new(
+                    FontisanStatus::InvalidArgument,
+                    "input is null with non-zero length",
+                ));
+            }
+            let input: &[u8] = if req.input_len == 0 {
+                &[]
+            } else {
+                unsafe { std::slice::from_raw_parts(req.input, req.input_len) }
+            };
+            let invalid = |m: &str| FfiError::new(FontisanStatus::InvalidArgument, m);
+            if input.len() < 16 {
+                return Err(invalid(
+                    "input is shorter than the 16-byte parameter prefix",
+                ));
+            }
+            let be = |at: usize| {
+                u32::from_be_bytes([input[at], input[at + 1], input[at + 2], input[at + 3]])
+            };
+            let profile = match be(0) {
+                0 => "pdf",
+                1 => "web",
+                2 => "minimal",
+                p => {
+                    return Err(FfiError::new(
+                        FontisanStatus::InvalidArgument,
+                        format!("unknown profile {p}"),
+                    ));
+                }
+            };
+            let n = be(4) as usize;
+            let ids_end = n
+                .checked_mul(4)
+                .and_then(|b| b.checked_add(16))
+                .filter(|e| *e <= input.len())
+                .ok_or_else(|| invalid("glyph id list is longer than the input"))?;
+            let gids: Vec<u32> = input[16..ids_end]
+                .chunks_exact(4)
+                .map(|c| u32::from_be_bytes([c[0], c[1], c[2], c[3]]))
+                .collect();
+            crate::subset::subset(&input[ids_end..], &gids, profile)
                 .map_err(|e| FfiError::new(FontisanStatus::ConvertFailed, e.to_string()))
         }
         op => Err(FfiError::new(

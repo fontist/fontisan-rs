@@ -11,6 +11,7 @@ pub mod convert;
 pub mod indexability;
 pub mod instance;
 pub mod sfnt;
+pub mod subset;
 
 #[cfg(feature = "ffi")]
 pub mod ffi;

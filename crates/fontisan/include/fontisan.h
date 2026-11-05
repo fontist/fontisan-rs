@@ -42,6 +42,11 @@ enum {
  * payload = the static instance (gvar fonts only), as Ruby Variable::Instancer#instance.
  * Failure message is "<ruby class>: <message>" with FONTISAN_E_CONVERT_FAILED. */
 #define FONTISAN_OP_INSTANCE 7u
+/* input = 16-byte prefix (u32 BE profile 0 pdf/1 web/2 minimal, u32 BE glyph
+ * count N, 8 reserved) + N u32 BE glyph ids + font bytes; payload = the subset
+ * font. Failure message is "<ruby class>: <message>" with status
+ * FONTISAN_E_CONVERT_FAILED. */
+#define FONTISAN_OP_SUBSET 6u
 
 typedef struct {
   uint32_t magic;
