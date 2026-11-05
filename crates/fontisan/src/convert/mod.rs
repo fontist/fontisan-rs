@@ -3,14 +3,14 @@
 //! Scope: static fonts. woff/woff2 to a same-flavour ttf/otf (through the
 //! Ruby `FontWriter` port), every static source to woff, and `UnpackCommand`
 //! style member extract. Outline conversion (1h-outline), WOFF2 encode
-//! (1h-woff2enc), collections (1h-coll) and variable instancing (1i) are
+//! collections (1h-coll) and variable instancing (1i) are
 //! typed [`ConvertError`]s with class `fontisan::Unsupported`.
 
 mod extract;
 mod woff1;
 mod writer;
 
-// 1h-woff2enc: pub mod woff2;
+pub mod woff2;
 
 use std::fmt;
 
@@ -110,9 +110,9 @@ fn has(tables: &Tables, tag: &[u8; 4]) -> bool {
     tables.iter().any(|(t, _)| t == tag)
 }
 
-/// `Fontisan.convert(input, to: target)` for static fonts. `_timestamp` is
-/// used by WOFF2 only (1h-woff2enc).
-pub fn convert(input: &[u8], target: Target, _timestamp: i64) -> Result<Vec<u8>, ConvertError> {
+/// `Fontisan.convert(input, to: target)` for static fonts. `timestamp` is
+/// used by WOFF2 encode only (head.modified, Ruby's encoder rules).
+pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, ConvertError> {
     let format = sfnt::detect_format(input);
     let sfnt_bytes: Vec<u8>;
     let raw: &[u8] = match format {
@@ -164,8 +164,7 @@ pub fn convert(input: &[u8], target: Target, _timestamp: i64) -> Result<Vec<u8>,
             let version = if want_glyf { 0x0001_0000 } else { 0x4F54_544F };
             Ok(write_font(&tables, version))
         }
-        Target::Woff2 => Err(ConvertError::unsupported(
-            "WOFF2 encode is card 1h-woff2enc",
-        )),
+        Target::Woff2 => woff2::encode_woff2(raw, Some(timestamp))
+            .map_err(|e| ConvertError::transform(e.to_string())),
     }
 }

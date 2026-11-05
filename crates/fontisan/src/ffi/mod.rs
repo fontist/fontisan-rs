@@ -99,6 +99,13 @@ pub const OP_CONVERT: u32 = 1;
 /// reserved bytes) followed by the collection. Payload: u32 BE basename
 /// length, the basename, then the member's font bytes.
 pub const OP_EXTRACT: u32 = 2;
+/// Encode a single-font sfnt as WOFF2 (card 1h-woff2enc). `input` is an 8-byte little-endian
+/// i64 Unix timestamp followed by the sfnt bytes; `flags` bit 0 set = use the timestamp for
+/// `head.modified`, clear = use the clock. The payload is the WOFF2 file.
+pub const OP_WOFF2_ENCODE: u32 = 3;
+/// `flags` bits 8..=15 of [`OP_WOFF2_ENCODE`]: Brotli quality + 1 (0 = the default, 11).
+/// `flags` bit for [`OP_WOFF2_ENCODE`]: the timestamp prefix is meaningful.
+pub const WOFF2_FLAG_TIMESTAMP: u32 = 1;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -219,6 +226,23 @@ unsafe fn dispatch(req: *const FontisanRequest) -> Result<Vec<u8>, FfiError> {
                 out.extend_from_slice(&x.data);
                 Ok(out)
             }
+        }
+        OP_WOFF2_ENCODE => {
+            if req.input.is_null() || req.input_len < 8 {
+                return Err(FfiError::new(
+                    FontisanStatus::InvalidArgument,
+                    "woff2 encode input needs an 8-byte timestamp prefix and a font",
+                ));
+            }
+            let input = unsafe { std::slice::from_raw_parts(req.input, req.input_len) };
+            let ts = i64::from_le_bytes(input[..8].try_into().expect("8 bytes"));
+            let ts = (req.flags & WOFF2_FLAG_TIMESTAMP != 0).then_some(ts);
+            let q = match (req.flags >> 8) & 0xFF {
+                0 => crate::convert::woff2::DEFAULT_BROTLI_QUALITY,
+                n => (n - 1) as u8,
+            };
+            crate::convert::woff2::encode_woff2_with_quality(&input[8..], ts, q)
+                .map_err(|e| FfiError::new(FontisanStatus::InvalidArgument, e.to_string()))
         }
         op => Err(FfiError::new(
             FontisanStatus::UnknownOp,

@@ -32,6 +32,11 @@ enum {
 /* input = 16-byte prefix (u32 BE member index, 12 reserved) + collection;
  * payload = u32 BE basename length, basename, member bytes. */
 #define FONTISAN_OP_EXTRACT 2u
+/* Encode a single-font sfnt as WOFF2. input = 8-byte little-endian i64 Unix timestamp, then the
+ * sfnt bytes. flags bit 0: use the timestamp for head.modified (else the clock); flags bits
+ * 8..15: Brotli quality + 1 (0 = default 11). The result payload is the WOFF2 file. */
+#define FONTISAN_OP_WOFF2_ENCODE 3u
+#define FONTISAN_WOFF2_FLAG_TIMESTAMP 1u
 
 typedef struct {
   uint32_t magic;

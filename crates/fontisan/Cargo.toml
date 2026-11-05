@@ -21,6 +21,8 @@ read-fonts = "=0.46.0"
 # WOFF/WOFF2 decode (1e): both pure Rust, no *-sys / links (scripts/check-no-c.sh).
 miniz_oxide = { version = "=0.8.9", default-features = false, features = ["with-alloc"] }
 brotli-decompressor = { version = "=5.0.3", default-features = false, features = ["std"] }
+# WOFF2 encode (1h): pure-Rust Brotli encoder (the decoder above is already in the graph).
+brotli = { version = "=8.0.4", default-features = false, features = ["std"] }
 # SHA-256 for variation table digests and per-glyph outline hashes (pure Rust).
 sha2 = "0.10"
 

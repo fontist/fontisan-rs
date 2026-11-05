@@ -22,3 +22,7 @@ panic = "unwind"
 
 [profile.dev]
 panic = "unwind"
+
+# Brotli's encoder is unusably slow unoptimised (WOFF2 encode tests, card 1h-woff2enc).
+[profile.dev.package.brotli]
+opt-level = 3
