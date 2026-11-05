@@ -2,9 +2,11 @@
 //! every `instance:*` case, and every variable-font `format:*` case, directly
 //! and through the C ABI. Missing goldens or corpus skip (and say so).
 //!
-//! `format:otf` of a variable TrueType font needs 1h-t2o's outline conversion
-//! and `format:woff2` needs 1h-woff2enc: those come back as
-//! `fontisan::Unsupported` and are tallied as pending, never as passes.
+//! A WOFF2 output is decoded the way the goldens were (pinned `woff2_decompress`: every
+//! glyph padded to 4 bytes, `decode_woff2`), not with Ruby's `Woff2Font` layout
+//! (`woff2_to_sfnt`, 1-byte alignment for a long `loca`), which hashes glyf/loca/head
+//! differently for the same file. Anything still `fontisan::Unsupported` is tallied as
+//! pending, never as a pass.
 mod common;
 
 use common::{corpus, font_path, hex};
@@ -22,7 +24,7 @@ fn decoded_tables(out: &[u8]) -> BTreeMap<String, String> {
     let sfnt = if out.starts_with(b"wOFF") {
         fontisan::woff::decode_woff(out).unwrap()
     } else if out.starts_with(b"wOF2") {
-        fontisan::sfnt::woff2_to_sfnt(out).unwrap()
+        fontisan::woff::decode_woff2(out).unwrap()
     } else {
         out.to_vec()
     };
@@ -232,20 +234,6 @@ fn instance_and_variable_convert_match_goldens() {
                     pending.push(format!("{id} {key}: pending-on-{owner} ({m})"));
                     continue;
                 }
-            }
-            if op == "format" && arg == "woff2" && case["outcome"] == "ok" {
-                // OPEN (found by 1i-instance, owner 1h-woff2enc): the decoded
-                // glyf, loca and head of Rust's WOFF2 for an instanced variable
-                // font differ from Ruby's (every other table matches, as do the
-                // woff and ttf/otf goldens of the same instance). Tallied, never
-                // counted as a pass; fails here once it starts matching.
-                let err = check(case, &direct).expect_err(&format!("{id} {key} now matches"));
-                assert!(
-                    err.contains(r#"["glyf", "head", "loca", "glyf", "head", "loca"]"#),
-                    "{id} {key}: {err}"
-                );
-                pending.push(format!("{id} {key}: open mismatch (woff2 glyf/loca/head)"));
-                continue;
             }
             let mut res = check(case, &direct);
             if res.is_ok() {
