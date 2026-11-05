@@ -9,17 +9,28 @@
 
 mod transform;
 
+/// `glyf`/`loca` -> transformed `glyf` without canonicalisation (Ruby's
+/// `GlyfLocaTransform` as the collection encoder calls it).
+pub(crate) fn transform_glyf(
+    glyf: &[u8],
+    loca: &[u8],
+    num_glyphs: usize,
+    index_long: bool,
+) -> Result<Vec<u8>, Error> {
+    transform::transform(glyf, loca, num_glyphs, index_long)
+}
+
 use std::collections::BTreeMap;
 use std::fmt;
 
 use crate::woff::{checksum, offset_table, round4};
 
 /// Seconds between 1904-01-01 (sfnt epoch) and 1970-01-01.
-const MAC_EPOCH_OFFSET: i64 = 2_082_844_800;
+pub(crate) const MAC_EPOCH_OFFSET: i64 = 2_082_844_800;
 /// Highest glyf size addressable by a short loca (`uint16::MAX * 2`).
 const SHORT_LOCA_GLYF_MAX: usize = 0x1FFFE;
 const CHECKSUM_ADJUSTMENT_MAGIC: u32 = 0xB1B0_AFBA;
-const HEAD_LEN: usize = 54;
+pub(crate) const HEAD_LEN: usize = 54;
 
 const KNOWN_TAGS: [&[u8; 4]; 63] = [
     b"cmap", b"head", b"hhea", b"hmtx", b"maxp", b"name", b"OS/2", b"post", b"cvt ", b"fpgm",
@@ -56,7 +67,7 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-fn tag_str(t: &Tag) -> String {
+pub(crate) fn tag_str(t: &Tag) -> String {
     String::from_utf8_lossy(t).into_owned()
 }
 
@@ -102,19 +113,19 @@ pub fn encode_woff2_with_quality(
     encode_tables(sfnt_tables(sfnt)?, timestamp, brotli_quality)
 }
 
-fn now() -> i64 {
+pub(crate) fn now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs() as i64)
 }
 
-fn u16_at(b: &[u8], off: usize) -> Result<u16, Error> {
+pub(crate) fn u16_at(b: &[u8], off: usize) -> Result<u16, Error> {
     b.get(off..off + 2)
         .map(|s| u16::from_be_bytes([s[0], s[1]]))
         .ok_or_else(|| Error::new("table too short"))
 }
 
-fn base128(out: &mut Vec<u8>, v: u32) {
+pub(crate) fn base128(out: &mut Vec<u8>, v: u32) {
     let mut bytes = vec![(v & 0x7F) as u8];
     let mut rest = v >> 7;
     while rest > 0 {
@@ -125,14 +136,14 @@ fn base128(out: &mut Vec<u8>, v: u32) {
     out.extend_from_slice(&bytes);
 }
 
-struct Entry {
-    tag: Tag,
-    orig_length: u32,
-    transform_length: Option<u32>,
+pub(crate) struct Entry {
+    pub(crate) tag: Tag,
+    pub(crate) orig_length: u32,
+    pub(crate) transform_length: Option<u32>,
 }
 
 impl Entry {
-    fn flags(&self) -> u8 {
+    pub(crate) fn flags(&self) -> u8 {
         let idx = KNOWN_TAGS
             .iter()
             .position(|k| **k == self.tag)
@@ -334,7 +345,7 @@ fn set_checksum_adjustment(t: &mut BTreeMap<Tag, Vec<u8>>, flavor: u32, loca: Op
     }
 }
 
-fn brotli_font(data: &[u8], quality: u8) -> Result<Vec<u8>, Error> {
+pub(crate) fn brotli_font(data: &[u8], quality: u8) -> Result<Vec<u8>, Error> {
     let params = brotli::enc::BrotliEncoderParams {
         quality: i32::from(quality),
         mode: brotli::enc::backward_references::BrotliEncoderMode::BROTLI_MODE_FONT,

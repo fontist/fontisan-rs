@@ -80,6 +80,10 @@ fn normalize_digits(m: &str) -> String {
     out
 }
 
+fn is_collection(input: &[u8]) -> bool {
+    input.starts_with(b"ttcf") || (input.starts_with(b"wOF2") && input.get(4..8) == Some(b"ttcf"))
+}
+
 fn sha(b: &[u8]) -> String {
     hex(&Sha256::digest(b))
 }
@@ -121,6 +125,28 @@ fn decoded_tables(out: &[u8]) -> BTreeMap<String, String> {
         .collect()
 }
 
+/// Per-member table digests of a WOFF2 collection, decoded like `woff2_decompress`.
+fn decoded_woff2_collection(out: &[u8]) -> Vec<BTreeMap<String, String>> {
+    let ttc = fontisan::woff::decode_woff2_collection(out).expect("decode woff2 collection");
+    let be32 = |at: usize| u32::from_be_bytes(ttc[at..at + 4].try_into().unwrap()) as usize;
+    (0..be32(8))
+        .map(|i| {
+            let dir = be32(12 + 4 * i);
+            let n = u16::from_be_bytes([ttc[dir + 4], ttc[dir + 5]]) as usize;
+            (0..n)
+                .map(|t| {
+                    let e = dir + 12 + 16 * t;
+                    let (off, len) = (be32(e + 8), be32(e + 12));
+                    (
+                        String::from_utf8_lossy(&ttc[e..e + 4]).into_owned(),
+                        sha(&ttc[off..off + len]),
+                    )
+                })
+                .collect()
+        })
+        .collect()
+}
+
 #[derive(Debug)]
 enum Got {
     Ok(Vec<u8>, Option<String>),
@@ -137,6 +163,9 @@ fn via_rust(input: &[u8], op: &str, to: &str, index: usize) -> Got {
     let target = match to {
         "ttf" => Target::Ttf,
         "otf" => Target::Otf,
+        "ttc" => Target::Ttc,
+        "otc" => Target::Otc,
+        "woff2" => Target::Woff2,
         _ => Target::Woff,
     };
     match convert::convert(input, target, 1_735_689_600) {
@@ -156,6 +185,9 @@ fn via_abi(input: &[u8], op: &str, to: &str, index: usize) -> Got {
             match to {
                 "ttf" => 0,
                 "otf" => 1,
+                "woff2" => 3,
+                "ttc" => 4,
+                "otc" => 5,
                 _ => 2,
             },
             OP_CONVERT,
@@ -211,6 +243,12 @@ fn check(id: &str, key: &str, case: &Value, got: &Got) -> Result<(), String> {
                 }
                 if sha(bytes) != want {
                     return Err(format!("sha256 {} != {want}", sha(bytes)));
+                }
+            } else if bytes.starts_with(b"wOF2") {
+                let want: Vec<BTreeMap<String, String>> =
+                    serde_json::from_value(case["decoded_tables"].clone()).unwrap();
+                if decoded_woff2_collection(bytes) != want {
+                    return Err("decoded woff2 collection tables differ".into());
                 }
             } else {
                 let mut want: BTreeMap<String, String> =
@@ -286,7 +324,11 @@ fn convert_and_extract_match_goldens() {
             let (op, arg) = key.split_once(':').unwrap();
             let in_scope = match op {
                 "extract" => true,
-                "format" => matches!(arg, "ttf" | "otf" | "woff"),
+                "format" => {
+                    matches!(arg, "ttf" | "otf" | "woff" | "ttc" | "otc")
+                        // 1h-coll: collection sources also convert to woff2.
+                        || (arg == "woff2" && is_collection(&input))
+                }
                 _ => false,
             };
             if !in_scope {
@@ -355,6 +397,11 @@ fn convert_and_extract_match_goldens() {
         failures.is_empty(),
         "parity failures:\n{}",
         failures.join("\n")
+    );
+    // 1h-coll: every collection-source case is converted, none unsupported.
+    assert!(
+        !unsupported.iter().any(|u| u.contains("collection")),
+        "collection cases reported unsupported: {unsupported:?}"
     );
     assert!(
         matched >= 73,

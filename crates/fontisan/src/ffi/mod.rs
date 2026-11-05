@@ -92,7 +92,7 @@ impl FontisanHeader {
 /// Operations. `Echo` exists to exercise the scaffolding; real ops come in 1g.
 pub const OP_ECHO: u32 = 0;
 /// Convert. `input` = 16-byte prefix (u32 BE target: 0 ttf, 1 otf, 2 woff,
-/// 3 woff2; u32 reserved; i64 BE timestamp) followed by the font bytes.
+/// 3 woff2, 4 ttc, 5 otc (collection sources); u32 reserved; i64 BE timestamp) followed by the font bytes.
 /// Payload: the converted font.
 pub const OP_CONVERT: u32 = 1;
 /// Extract a collection member. `input` = 16-byte prefix (u32 BE index; 12

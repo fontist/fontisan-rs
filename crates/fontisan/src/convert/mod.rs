@@ -5,6 +5,7 @@
 //! style member extract. Collections (1h-coll) are
 //! typed [`ConvertError`]s with class `fontisan::Unsupported`.
 
+mod collection;
 mod extract;
 mod outline_o2t;
 mod outline_t2o;
@@ -68,6 +69,9 @@ pub enum Target {
     Otf = 1,
     Woff = 2,
     Woff2 = 3,
+    /// Collection targets (card 1h-coll): `format:ttc` and `format:otc`.
+    Ttc = 4,
+    Otc = 5,
 }
 
 impl Target {
@@ -77,6 +81,8 @@ impl Target {
             1 => Some(Self::Otf),
             2 => Some(Self::Woff),
             3 => Some(Self::Woff2),
+            4 => Some(Self::Ttc),
+            5 => Some(Self::Otc),
             _ => None,
         }
     }
@@ -115,6 +121,22 @@ fn has(tables: &Tables, tag: &[u8; 4]) -> bool {
 /// used by WOFF2 encode only (head.modified, Ruby's encoder rules).
 pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, ConvertError> {
     let format = sfnt::detect_format(input);
+    // 1h-coll: collection sources (ttcf, or a WOFF2 with the ttcf flavor).
+    let woff2_collection = input.starts_with(b"wOF2") && input.get(4..8) == Some(b"ttcf");
+    if matches!(format, Some(Format::Ttc | Format::Otc)) || woff2_collection {
+        let source = if woff2_collection {
+            collection::Source::Woff2Collection
+        } else {
+            collection::Source::Ttc
+        };
+        return collection::convert(input, source, target, timestamp);
+    }
+    if matches!(target, Target::Ttc | Target::Otc) {
+        return Err(ConvertError::transform(
+            "Target format is not a collection format for a single font",
+        ));
+    }
+    // end 1h-coll
     let sfnt_bytes: Vec<u8>;
     let raw: &[u8] = match format {
         Some(Format::Ttf | Format::Otf) => input,
@@ -128,11 +150,6 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
             sfnt_bytes = crate::sfnt::woff2_view::single(input)
                 .map_err(|e| ConvertError::transform(format!("{e:?}")))?;
             &sfnt_bytes
-        }
-        Some(Format::Ttc | Format::Otc) => {
-            return Err(ConvertError::unsupported(
-                "collection conversion is card 1h-coll",
-            ));
         }
         _ => {
             return Err(ConvertError::new(
@@ -183,6 +200,7 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
             let version = if want_glyf { 0x0001_0000 } else { 0x4F54_544F };
             Ok(write_font(&tables, version))
         }
+        Target::Ttc | Target::Otc => unreachable!("handled above"),
         Target::Woff2 => {
             // A variable source encodes its instanced tables, not the raw input.
             let instanced;
