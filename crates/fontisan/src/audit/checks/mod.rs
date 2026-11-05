@@ -12,6 +12,7 @@ pub mod post;
 
 pub mod cmap;
 pub mod collection_integrity;
+pub mod format_round_trip;
 pub mod glyf;
 pub mod glyph_name;
 pub mod hinting;

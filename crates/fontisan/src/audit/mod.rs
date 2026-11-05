@@ -13,7 +13,6 @@ use crate::sfnt::Font;
 use checks::*;
 
 /// The `default` profile in the Ruby registry's order (`CheckRegistry::PROFILES[:default]`).
-/// `format_round_trip` (card 1f-b) is the one Ruby check not ported yet.
 pub const REGISTRY: &[(&str, CheckFn)] = &[
     (table_directory::CODE, table_directory::run),
     (glyph_name::CODE, glyph_name::run),
@@ -23,7 +22,7 @@ pub const REGISTRY: &[(&str, CheckFn)] = &[
     (variable_font::CODE, variable_font::run),
     (hinting::CODE, hinting::run),
     (woff2_validation::CODE, woff2_validation::run),
-    // 1f-b (format_round_trip::CODE, format_round_trip::run),
+    (format_round_trip::CODE, format_round_trip::run),
     (opentype_conformance::CODE, opentype_conformance::run),
     (naming_consistency::CODE, naming_consistency::run),
     (head::CODE, head::run),

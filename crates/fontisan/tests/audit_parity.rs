@@ -2,10 +2,8 @@
 //! read goldens (ci fonts incl. the `_swallow` cases), and the
 //! `indexability` profile against the scan goldens' `validation` field.
 //!
-//! Every category is compared, including the WOFF/WOFF2/collection faces, except
-//! `format_round_trip` (card 1f-b), whose golden issues are dropped and the
-//! summary recomputed. Pending (counted and printed): dfont (unsupported) and
-//! Type 1 (golden is a Ruby error), both routed to Ruby.
+//! Every category is compared whole, including the WOFF/WOFF2/collection faces.
+//! Pending (counted and printed): dfont (unsupported) and Type 1 (golden is a Ruby error), both routed to Ruby.
 mod common;
 #[path = "common/goldens.rs"]
 mod goldens;
@@ -105,47 +103,6 @@ fn report_json(r: &Report) -> Value {
     Value::Object(o)
 }
 
-/// The one category not ported yet (card 1f-b); its golden issues are dropped and
-/// the summary recomputed over the rest.
-const PENDING_CATEGORY: &str = "format_round_trip";
-
-fn without_pending_category(face: &Value) -> Value {
-    let mut face = face.clone();
-    let Some(all) = face
-        .get("validation_issues")
-        .and_then(|v| v.as_array())
-        .cloned()
-    else {
-        return face;
-    };
-    let kept: Vec<Value> = all
-        .into_iter()
-        .filter(|i| i["category"] != PENDING_CATEGORY)
-        .collect();
-    let parsed: Vec<audit::Issue> = kept
-        .iter()
-        .map(|i| {
-            let sev = match i["severity"].as_str().unwrap() {
-                "info" => audit::Severity::Info,
-                "warning" => audit::Severity::Warning,
-                "error" => audit::Severity::Error,
-                _ => audit::Severity::Fatal,
-            };
-            audit::Issue::new(i["category"].as_str().unwrap(), sev, "")
-        })
-        .collect();
-    let obj = face.as_object_mut().unwrap();
-    obj.remove("validation_issues");
-    if !kept.is_empty() {
-        obj.insert("validation_issues".into(), Value::Array(kept));
-    }
-    obj.insert(
-        "validation_summary".into(),
-        summary_json(&Summary::from_issues(&parsed)),
-    );
-    face
-}
-
 #[test]
 fn audit_matches_goldens_on_every_ci_font() {
     let Some(corpus) = corpus() else { return };
@@ -153,7 +110,7 @@ fn audit_matches_goldens_on_every_ci_font() {
         return;
     };
     let codes = audit::registered_codes();
-    assert!(!codes.contains(&PENDING_CATEGORY));
+    assert!(codes.contains(&"format_round_trip"));
     let (mut compared, mut pending) = (0, Vec::new());
     let mut formats = std::collections::BTreeSet::<String>::new();
     let mut by_category = std::collections::BTreeMap::<String, usize>::new();
@@ -181,11 +138,7 @@ fn audit_matches_goldens_on_every_ci_font() {
             };
             assert_eq!(got.len(), faces.len(), "{} {profile}: face count", case.id);
             for (i, (g, w)) in got.iter().zip(faces).enumerate() {
-                let w = if validate {
-                    without_pending_category(w)
-                } else {
-                    w.clone()
-                };
+                let w = w.clone();
                 let mut g = report_json(g);
                 if validate {
                     assert!(g.get("validation_summary").is_some());
