@@ -1,11 +1,11 @@
 //! `opentype_conformance` (Ruby `OpenTypeConformanceCheck`): required tables for
 //! the sfnt flavor, loca size against head/maxp, hhea.numberOfHMetrics bounds.
-//! WOFF/WOFF2 faces raise in Ruby (`WoffFont` has no `tables`); that path is
-//! pending until those containers load (card 1e-wire).
+//! WOFF/WOFF2 faces with a loca table raise in Ruby (`WoffFont`/`Woff2Font` have
+//! no `tables`), reproduced as the golden NoMethodError.
 
 use super::rubyfmt::{nil_method, required};
 use crate::audit::types::{CheckError, Issue, Severity};
-use crate::sfnt::Font;
+use crate::sfnt::{Font, Format};
 
 pub const CODE: &str = "opentype_conformance";
 
@@ -38,6 +38,17 @@ pub fn run(font: &Font<'_>) -> Result<Vec<Issue>, CheckError> {
 
     // validate_loca_format
     if font.has_table("head") && font.has_table("loca") {
+        let receiver = match font.format() {
+            Format::Woff => Some("#<Fontisan::WoffFont>"),
+            Format::Woff2 => Some("an instance of Fontisan::Woff2Font"),
+            _ => None,
+        };
+        if let Some(r) = receiver {
+            return Err(CheckError::new(
+                "NoMethodError",
+                format!("undefined method 'tables' for {r}"),
+            ));
+        }
         let head = required(font.head(), "index_to_loc_format")?;
         let loca_entry = font.entries().iter().find(|e| &e.tag == b"loca");
         // `loca` is nil when its data starts past EOF

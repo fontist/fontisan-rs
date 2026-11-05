@@ -23,6 +23,18 @@ fn checksum(data: &[u8]) -> u32 {
 }
 
 pub fn run(font: &Font<'_>) -> Result<Vec<Issue>, CheckError> {
+    // Ruby reads search_range off the WOFF/WOFF2 header, which has none.
+    let header = match font.format() {
+        crate::sfnt::Format::Woff => Some("#<Fontisan::WoffHeader>"),
+        crate::sfnt::Format::Woff2 => Some("#<Fontisan::Woff2::Woff2Header>"),
+        _ => None,
+    };
+    if let Some(h) = header {
+        return Err(CheckError::new(
+            "NoMethodError",
+            format!("undefined method 'search_range' for {h}"),
+        ));
+    }
     let (num_tables, search_range, entry_selector, range_shift) = font.directory_fields();
     let n = u64::from(num_tables);
     let mut issues = Vec::new();
