@@ -13,6 +13,7 @@ confidence-threshold = 0.9
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+allow-wildcard-paths = true  # fontisan-ffi (publish = false) uses a path dep on the engine
 # `*-sys` bans are NOT done here: wildcard crate bans were measured to be a silent
 # no-op (cargo-deny 0.20.2). scripts/check-no-c.sh enforces the no-C rule.
 
