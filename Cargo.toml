@@ -1,0 +1,24 @@
+[workspace]
+resolver = "3"
+members = ["crates/fontisan", "crates/fontisan-ffi"]
+# xtask is its own workspace so its dependencies never enter the engine graph.
+exclude = ["xtask"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+# 1.85 is the first release with edition 2024 and the MSRV-aware resolver 3.
+rust-version = "1.85"
+license = "BSD-3-Clause"
+repository = "https://github.com/fontist/fontisan-rs"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+# `panic = "unwind"` is deliberate: the C ABI wraps every entry in catch_unwind
+# (abort and catch_unwind cannot coexist). Spelled out so nobody flips it.
+[profile.release]
+panic = "unwind"
+
+[profile.dev]
+panic = "unwind"

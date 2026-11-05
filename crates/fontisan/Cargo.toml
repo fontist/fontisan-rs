@@ -1,0 +1,33 @@
+[package]
+name = "fontisan"
+description = "Pure-Rust font engine (read, scan, audit, convert), with an optional versioned C ABI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+# The C ABI source of truth. The gem's cdylib builds from the published crate
+# with this feature on; `fontisan-ffi` is only a thin wrapper for C-side tests.
+ffi = []
+
+[dev-dependencies]
+criterion = { version = "=0.5.1", default-features = false }
+
+[[bench]]
+name = "abi"
+harness = false
+required-features = ["ffi"]
+
+[[test]]
+name = "ffi_abi"
+required-features = ["ffi"]
+
+[lints]
+workspace = true
+
+[[test]]
+name = "ffi_leak"
+required-features = ["ffi"]
