@@ -404,7 +404,7 @@ fn convert_and_extract_match_goldens() {
         "collection cases reported unsupported: {unsupported:?}"
     );
     assert!(
-        matched >= 73,
+        matched >= 85,
         "only {matched} cases matched; goldens missing?"
     );
 }
