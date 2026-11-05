@@ -16,6 +16,10 @@ pub enum ErrorClass {
     Argument,
     /// `NoMethodError` (Ruby's batched metadata read hits a nil buffer).
     NoMethod,
+    /// `Fontisan::CorruptedTableError` (loca and CFF structure checks).
+    CorruptedTable,
+    /// `Fontisan::Reference::TableDigests::Truncated` (the CFF2 charstring walk).
+    Truncated,
     /// A format the native engine does not read (WOFF/WOFF2 before 1e, dfont,
     /// Type 1): the caller routes it elsewhere. Not a Ruby class.
     Unsupported,
@@ -31,6 +35,8 @@ impl ErrorClass {
             Self::InvalidFont => "Fontisan::InvalidFontError",
             Self::Argument => "ArgumentError",
             Self::NoMethod => "NoMethodError",
+            Self::CorruptedTable => "Fontisan::CorruptedTableError",
+            Self::Truncated => "Fontisan::Reference::TableDigests::Truncated",
             Self::Unsupported => "Fontisan::UnsupportedFormat",
         }
     }
