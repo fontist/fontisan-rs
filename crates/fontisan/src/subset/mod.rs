@@ -329,11 +329,7 @@ mod tests {
 
     #[test]
     fn missing_loca_reports_required_table() {
-        let f = font(&[
-            (b"head", head()),
-            (b"maxp", maxp()),
-            (b"glyf", vec![]),
-        ]);
+        let f = font(&[(b"head", head()), (b"maxp", maxp()), (b"glyf", vec![])]);
         let (class, msg) = err(subset(&f, &[0], "web"));
         assert_eq!(class, "Fontisan::MissingTableError");
         assert_eq!(msg, "Required table 'loca' not found in font");

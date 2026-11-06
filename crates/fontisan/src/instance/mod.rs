@@ -113,7 +113,10 @@ pub(crate) fn instance_tables(
         if get(tables, tag).is_none() {
             return Err(ConvertError::new(
                 "Fontisan::MissingTableError",
-                format!("Font missing required {} table", String::from_utf8_lossy(tag)),
+                format!(
+                    "Font missing required {} table",
+                    String::from_utf8_lossy(tag)
+                ),
             ));
         }
     }
@@ -607,7 +610,9 @@ mod tests {
     fn dropped_required_table_is_named_before_axis_parsing() {
         // fvar is garbage: Ruby's check_font! reports the missing table first.
         for gone in ["head", "hhea", "hmtx", "maxp", "loca"] {
-            let all = [b"fvar", b"gvar", b"glyf", b"head", b"hhea", b"hmtx", b"maxp", b"loca"];
+            let all = [
+                b"fvar", b"gvar", b"glyf", b"head", b"hhea", b"hmtx", b"maxp", b"loca",
+            ];
             let kept: Vec<&[u8; 4]> = all
                 .iter()
                 .copied()
@@ -621,7 +626,9 @@ mod tests {
 
     #[test]
     fn variable_font_without_gvar_keeps_every_table() {
-        let all = tables(&[b"fvar", b"avar", b"HVAR", b"MVAR", b"STAT", b"DSIG", b"glyf"]);
+        let all = tables(&[
+            b"fvar", b"avar", b"HVAR", b"MVAR", b"STAT", b"DSIG", b"glyf",
+        ]);
         assert_eq!(drop_variation_tables(all.clone()), all);
     }
 }

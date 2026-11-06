@@ -19,13 +19,12 @@ fn parse_loca(tables: &Tables, num_glyphs: u32) -> Result<Vec<usize>, SubsetErro
             "numGlyphs must be >= 1, got: {num_glyphs}"
         )));
     }
-    let loca = find(tables, "loca")
-        .ok_or_else(|| {
-            SubsetError::new(
-                "Fontisan::MissingTableError",
-                "Required table 'loca' not found in font",
-            )
-        })?;
+    let loca = find(tables, "loca").ok_or_else(|| {
+        SubsetError::new(
+            "Fontisan::MissingTableError",
+            "Required table 'loca' not found in font",
+        )
+    })?;
     let count = num_glyphs as usize + 1;
     let mut offs = Vec::with_capacity(count);
     for i in 0..count {
