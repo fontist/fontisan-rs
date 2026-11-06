@@ -298,14 +298,17 @@ fn audit_of_fonts_missing_a_table_matches_ruby() {
 
 /// Measured in fontisan-phase2 (Ruby 3.4.8), `TestTTF.ttf` with one table
 /// dropped, `Fontisan::Reference.convert(..., to: :otf, output: ...)`. The
-/// `name` text is Ruby's own encoding error, pinned verbatim.
+/// `name` text is Ruby's missing-table check (gem 84eb179), pinned verbatim.
 #[test]
 fn ttf_to_otf_without_loca_name_post_os2_or_cmap_fails_like_ruby() {
     let Some(corpus) = corpus() else { return };
     let src = std::fs::read(corpus.join("fonts/TestTTF.ttf")).unwrap();
     let want: [(&[u8; 4], &str); 5] = [
         (b"loca", "TrueType font missing required glyf or loca table"),
-        (b"name", "item 0 must have BINARY encoding, got: UTF-8"),
+        (
+            b"name",
+            "Output validation failed: Font structure validation failed for check 'required_tables', Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing",
+        ),
         (
             b"post",
             "Output validation failed: Required table 'post' is missing",

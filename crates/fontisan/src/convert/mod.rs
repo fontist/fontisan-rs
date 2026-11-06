@@ -340,15 +340,14 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
                     ));
                 }
                 require_core_tables(&tables)?;
-                if !has(&tables, b"name") {
-                    // Ruby fails while writing the rebuilt font (its own bug, verbatim).
-                    return Err(ConvertError::transform(
-                        "item 0 must have BINARY encoding, got: UTF-8",
-                    ));
-                }
                 validate_output_tables(
                     &tables,
-                    &[(b"post", POST_MSG), (b"OS/2", OS2_MSG), (b"cmap", CMAP_MSG)],
+                    &[
+                        (b"post", POST_MSG),
+                        (b"name", NAME_MSG),
+                        (b"OS/2", OS2_MSG),
+                        (b"cmap", CMAP_MSG),
+                    ],
                 )?;
                 let converted = outline_t2o::convert_ttf_to_otf(&tables)?;
                 let out = write_font(&converted, 0x4F54_544F);
