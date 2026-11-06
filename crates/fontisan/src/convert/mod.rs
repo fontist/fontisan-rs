@@ -50,9 +50,6 @@ impl ConvertError {
             ),
         )
     }
-    pub(crate) fn unsupported(message: impl Into<String>) -> Self {
-        Self::new(UNSUPPORTED_CLASS, message)
-    }
 }
 
 impl fmt::Display for ConvertError {
@@ -134,9 +131,7 @@ fn require_core_tables(tables: &Tables) -> Result<(), ConvertError> {
 const POST_MSG: &str = "Required table 'post' is missing";
 const NAME_MSG: &str = "Font structure validation failed for check 'required_tables', Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing";
 const OS2_MSG: &str = "Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing";
-const CMAP_MSG: &str = "Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing, Exception during check execution: NoMethodError - undefined method 'valid_glyph_indices?' for nil";
-/// The same check on a CFF-sourced font: Ruby has no glyph-index check to fail.
-const CMAP_MSG_CFF: &str = "Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing";
+const CMAP_MSG: &str = "Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing";
 
 /// Ruby's output validation when a required table is absent from the source.
 /// Ruby repeats a clause once per failing check; the texts above are its
@@ -245,10 +240,7 @@ fn validate_rebuilt_output(tables: &Tables, glyf: bool) -> Result<(), ConvertErr
         (b"post", POST_MSG.to_string()),
         (b"name", NAME_MSG.to_string()),
         (b"OS/2", OS2_MSG.to_string()),
-        (
-            b"cmap",
-            if glyf { CMAP_MSG } else { CMAP_MSG_CFF }.to_string(),
-        ),
+        (b"cmap", CMAP_MSG.to_string()),
     ]);
     validate_checks(tables, checks)
 }
@@ -261,7 +253,7 @@ fn validate_ttf_output(ttf: &Tables) -> Result<(), ConvertError> {
             (b"post", POST_MSG),
             (b"name", NAME_MSG),
             (b"OS/2", OS2_MSG),
-            (b"cmap", CMAP_MSG_CFF),
+            (b"cmap", CMAP_MSG),
         ],
     )
 }

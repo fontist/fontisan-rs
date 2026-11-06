@@ -15,7 +15,7 @@
   "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing"
  },
  "otf|fonttools-test-woff|cmap": {
-  "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing, Exception during check execution: NoMethodError - undefined method 'valid_glyph_indices?' for nil"
+  "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing"
  },
  "otf|fonttools-test-woff|head": {
   "error": "Conversion failed: Transformation failed: Output validation failed: Font structure validation failed for check 'required_tables', Required table 'head' is missing, Required table 'head' is missing, Required table 'head' is missing"
@@ -51,7 +51,7 @@
   "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing"
  },
  "otf|source-sans-3-regular-otf-woff|cmap": {
-  "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing, Exception during check execution: NoMethodError - undefined method 'valid_glyph_indices?' for nil"
+  "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing"
  },
  "otf|source-sans-3-regular-otf-woff|head": {
   "error": "Conversion failed: Transformation failed: Output validation failed: Font structure validation failed for check 'required_tables', Required table 'head' is missing, Required table 'head' is missing, Required table 'head' is missing"
@@ -87,7 +87,7 @@
   "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing"
  },
  "ttf|quirk-sfnt-version-otto-on-glyf|cmap": {
-  "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing, Exception during check execution: NoMethodError - undefined method 'valid_glyph_indices?' for nil"
+  "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing"
  },
  "ttf|quirk-sfnt-version-otto-on-glyf|glyf": {
   "error": "Conversion failed: Transformation failed: Cannot detect font format: missing both CFF and glyf tables"
@@ -120,7 +120,7 @@
   "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing"
  },
  "ttf|source-sans-3-regular-ttf-woff|cmap": {
-  "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing, Exception during check execution: NoMethodError - undefined method 'valid_glyph_indices?' for nil"
+  "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing"
  },
  "ttf|source-sans-3-regular-ttf-woff|glyf": {
   "error": "Conversion failed: Transformation failed: Cannot detect font format: missing both CFF and glyf tables"

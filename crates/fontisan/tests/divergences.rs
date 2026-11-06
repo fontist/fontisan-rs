@@ -234,7 +234,7 @@ fn cff_to_ttf_without_post_name_os2_or_cmap_fails_like_ruby() {
         ),
         (
             b"cmap",
-            "Output validation failed: Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing, Exception during check execution: NoMethodError - undefined method 'valid_glyph_indices?' for nil",
+            "Output validation failed: Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing",
         ),
     ];
     for (tag, msg) in want {
@@ -316,7 +316,7 @@ fn ttf_to_otf_without_loca_name_post_os2_or_cmap_fails_like_ruby() {
         ),
         (
             b"cmap",
-            "Output validation failed: Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing, Exception during check execution: NoMethodError - undefined method 'valid_glyph_indices?' for nil",
+            "Output validation failed: Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing",
         ),
     ];
     for (tag, msg) in want {
