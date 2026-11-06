@@ -328,8 +328,8 @@ fn read_face_hashed(
     let post = match gated(font.post())? {
         None => Json::Null,
         Some(p) => {
-            let g = p.glyph_names();
-            obj! {"glyph_name_count" => g.len(), "glyph_names_sha256" => sha_hex(g.join("\n").as_bytes()),
+            let g = p.glyph_names_raw();
+            obj! {"glyph_name_count" => g.len(), "glyph_names_sha256" => sha_hex(&g.join(&b'\n')),
             "version_raw" => p.version_raw, "italic_angle_raw" => p.italic_angle_raw,
             "underline_position" => p.underline_position,
             "underline_thickness" => p.underline_thickness,
