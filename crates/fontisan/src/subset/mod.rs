@@ -6,11 +6,12 @@
 //! strategies (glyf/loca/head/hhea/hmtx/maxp/cmap rebuilt, name/OS/2/post and
 //! the layout tables passed through) and `FontWriter` assembly. `head.modified`
 //! is preserved. Out of this card's scope, typed `fontisan::Unsupported`: a
-//! profile table the port does not cover for the given font (CFF / CFF2 /
-//! CBDT / CBLC), collections.
+//! profile table the port does not cover for the given font (CFF2),
+//! collections.
 
 mod cff;
 mod cmap;
+mod color_bitmap;
 mod glyf;
 
 use std::collections::BTreeSet;
@@ -256,7 +257,12 @@ fn strategy(
         }
         "cmap" => cmap::subset(data, mapping),
         "CFF " => cff::subset(tables, mapping, data, num_glyphs),
-        "CFF2" | "CBDT" | "CBLC" => Err(SubsetError::unsupported(format!(
+        "CBDT" | "CBLC" => {
+            let (cbdt, cblc) =
+                color_bitmap::subset(find(tables, "CBDT"), find(tables, "CBLC"), mapping)?;
+            Ok(if tag == "CBDT" { cbdt } else { cblc })
+        }
+        "CFF2" => Err(SubsetError::unsupported(format!(
             "subsetting the {} table is not supported",
             tag.trim_end()
         ))),

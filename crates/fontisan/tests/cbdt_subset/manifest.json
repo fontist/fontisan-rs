@@ -1,0 +1,72 @@
+[
+  {
+    "name": "stock_keep_some",
+    "text": "ACE",
+    "gids": [
+      1,
+      3,
+      5
+    ],
+    "input_sha256": "1da1c6da42f2bdb2fba73be7722100b82c17562b9cd968f581ce528ab11d0a31",
+    "expected_sha256": "b8d14fa006cdc61ba514d60f6f9e7e03a97dd5ebc51c6463d46f7969fccb4904"
+  },
+  {
+    "name": "stock_keep_all",
+    "text": "ABCDEF",
+    "gids": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "input_sha256": "1da1c6da42f2bdb2fba73be7722100b82c17562b9cd968f581ce528ab11d0a31",
+    "expected_sha256": "84a7856064f0c05a8a3f617d6156e2c08f339fdd63491265e077c936e3b67026"
+  },
+  {
+    "name": "multi_strike",
+    "text": "BCEGHI",
+    "gids": [
+      2,
+      3,
+      5,
+      7,
+      8,
+      9
+    ],
+    "input_sha256": "ba174577dd2418106f9d36b43054f61b9a2374113735544c57e2aad5675f342b",
+    "expected_sha256": "83d885aa4db3cd77a97d31ef2f20ffa617bb794f2c6f0884d5bf6fcf1544389d"
+  },
+  {
+    "name": "multi_strike_all",
+    "text": "ABCDEFGHIJKL",
+    "gids": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "input_sha256": "ba174577dd2418106f9d36b43054f61b9a2374113735544c57e2aad5675f342b",
+    "expected_sha256": "44c32493a8c4a42a4cc6f4f8f2ff3ec6630c3b0da389ffc38a654210c1d430c6"
+  },
+  {
+    "name": "format5",
+    "text": "BCD",
+    "gids": [
+      2,
+      3,
+      4
+    ],
+    "input_sha256": "73215c4d98ee5f71bb761f7b5d15d89a2aab7860cd3a30d8b7cf15fd024a915c",
+    "expected_sha256": "5cd32dca5b33b64085545033d3c02954b2934125711583e26892b4bc17752ed5"
+  }
+]
