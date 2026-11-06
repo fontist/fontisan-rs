@@ -60,7 +60,15 @@ fn format4(d: &[u8], m: &mut BTreeMap<u32, u32>) {
     let deltas = read_array(14 + seg_count * 4 + 2);
     let range_pos = 14 + seg_count * 6 + 2;
     let ranges = read_array(range_pos);
-    for i in 0..seg_count {
+    // Ruby maps segment by segment, code by code, a later segment overwriting an
+    // earlier one, so thousands of overlapping full-range segments are quadratic.
+    // Same result in one pass: walk the segments last to first and fill only codes no
+    // later segment has claimed (`find`). A code that maps to glyph 0 or past the
+    // table is never stored, so it does not claim; for a range-offset segment the
+    // glyph array only gets further out as the code grows, so the first code past
+    // `length` ends that segment.
+    let mut next: Vec<u32> = (0..=0x1_0000).collect();
+    for i in (0..seg_count).rev() {
         let (Some(&start), Some(&end), Some(&delta), Some(&range)) =
             (starts.get(i), ends.get(i), deltas.get(i), ranges.get(i))
         else {
@@ -69,22 +77,33 @@ fn format4(d: &[u8], m: &mut BTreeMap<u32, u32>) {
         if start == 0xFFFF {
             continue;
         }
-        for code in start..=end {
+        let mut code = start as u32;
+        while code <= end as u32 {
+            let c = find(&mut next, code);
+            if c > end as u32 {
+                break;
+            }
+            let cc = c as u16;
             let glyph = if range == 0 {
-                code.wrapping_add(delta)
+                cc.wrapping_add(delta)
             } else {
-                let at = range_pos + i * 2 + range as usize + (code - start) as usize * 2;
+                let at = range_pos + i * 2 + range as usize + (cc - start) as usize * 2;
                 if at + 2 > length {
-                    continue;
+                    break;
                 }
                 match be16(d, at) {
-                    Some(0) | None => continue,
+                    Some(0) | None => {
+                        code = c + 1;
+                        continue;
+                    }
                     Some(g) => g.wrapping_add(delta),
                 }
             };
             if glyph != 0 {
-                m.insert(code as u32, glyph as u32);
+                m.insert(c, glyph as u32);
+                next[c as usize] = c + 1;
             }
+            code = c + 1;
         }
     }
 }
@@ -297,6 +316,23 @@ mod tests {
         }
         let m = Cmap::parse(&raw).unwrap().mappings();
         assert_eq!(m, vec![(10, 100), (11, 1), (12, 102)]);
+    }
+
+    /// Format 4 with the most full-range segments its u16 length allows: must be
+    /// linear in the table, with the last segment winning.
+    #[test]
+    fn format_4_overlapping_segments_are_linear_and_last_wins() {
+        let segs: Vec<(u16, u16, u16)> = (0..8000u16).map(|i| (0, 0xFFFE, i + 1)).collect();
+        let raw = format4_cmap(&segs, None);
+        let t = std::time::Instant::now();
+        let m = Cmap::parse(&raw).unwrap().mappings();
+        assert!(t.elapsed().as_secs() < 10, "took {:?}", t.elapsed());
+        // The last segment (delta 8000) wins: code 0 -> 8000, 0xFFFE wraps to 7998.
+        // Code 57536 would be glyph 0 there, so the one before it (delta 7999) keeps it.
+        assert_eq!(m[0], (0, 8000));
+        assert_eq!(m.last(), Some(&(0xFFFE, 7998)));
+        assert_eq!(m[57536], (57536, 65535));
+        assert_eq!(m.len(), 0xFFFF);
     }
 
     /// Format 4 subtable for the segments `(start, end, delta)` plus the 0xFFFF
