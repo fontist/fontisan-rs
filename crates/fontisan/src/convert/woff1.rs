@@ -28,7 +28,7 @@ pub(crate) fn encode(tables: &Tables) -> Vec<u8> {
             }
         })
         .collect();
-    ts.sort_by(|a, b| a.tag.cmp(&b.tag));
+    ts.sort_by_key(|t| t.tag);
     let n = ts.len();
     let mut cursor = 44 + 20 * n;
     let mut dir = Vec::with_capacity(20 * n);
