@@ -1,0 +1,21 @@
+[package]
+name = "fontisan-ffi"
+description = "cdylib/staticlib wrapper around fontisan::ffi for C-side tests"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "fontisan"
+crate-type = ["cdylib", "staticlib"]
+# Two libs named `fontisan` collide in `cargo doc --workspace`.
+doc = false
+
+[dependencies]
+engine = { package = "fontisan", path = "../fontisan", features = ["ffi"] }
+
+[lints]
+workspace = true

@@ -1,0 +1,13 @@
+[package]
+name = "xtask"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+# Own workspace: nothing here ever enters the engine graph (no-C rule does not apply).
+[workspace]
+
+[dependencies]
+serde_json = "1"
+sha2 = "0.10"

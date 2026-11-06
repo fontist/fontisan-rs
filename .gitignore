@@ -1,2 +1,5 @@
 /target
 Cargo.lock.bak
+/xtask/target
+/.corpus
+/.woff2-ref
