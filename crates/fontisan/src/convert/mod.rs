@@ -306,11 +306,9 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
 
     // 1i-instance: a variable font goes through instancing at its default
     // location first, whatever the target (Ruby's `:instance` strategy).
-    let tables = if is_variable && !has(&tables, b"gvar") && !has(&tables, b"CFF2") {
-        // No variation outlines to apply (gvar or CFF2 dropped): Ruby converts
-        // the default outlines and drops the variation tables.
-        crate::instance::drop_variation_tables(tables)
-    } else if is_variable {
+    // A variable font with neither gvar nor CFF2 is `:static` to Ruby's
+    // `FormatDetector#variation_type`: every table passes through untouched.
+    let tables = if is_variable && (has(&tables, b"gvar") || has(&tables, b"CFF2")) {
         if has(&tables, b"CFF2") {
             return Err(ConvertError::transform(
                 "Static instancing needs TrueType outlines with gvar (CFF2 variable fonts are not supported yet)",
@@ -368,8 +366,11 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
             }
             // end 1h-o2t
             if has(&tables, b"glyf") != want_glyf {
-                return Err(ConvertError::unsupported(
-                    "CFF to TrueType outline conversion is card 1h-o2t",
+                // Only a CFF2-flavoured source reaches here (glyf wanted, none present,
+                // no CFF table). Ruby's CFF2 source check rejects it: the CFF2 table is
+                // absent or fails to parse.
+                return Err(ConvertError::transform(
+                    "CFF2 font missing required CFF2 table",
                 ));
             }
             // Ruby validates the written font unless the detected source format
@@ -395,5 +396,47 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
             woff2::encode_woff2(src, Some(timestamp))
                 .map_err(|e| ConvertError::transform(e.to_string()))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn core() -> Tables {
+        ["head", "hhea", "maxp"]
+            .iter()
+            .map(|t| {
+                (
+                    <[u8; 4]>::try_from(format!("{t:<4}").as_bytes()).unwrap(),
+                    vec![0; 54],
+                )
+            })
+            .collect()
+    }
+
+    fn sfnt(mut tables: Tables, extra: &[&[u8; 4]]) -> Vec<u8> {
+        tables.extend(extra.iter().map(|t| (**t, vec![0; 8])));
+        write_font(&tables, 0x4F54_544F)
+    }
+
+    #[test]
+    fn cff2_source_without_loadable_cff2_to_ttf_matches_ruby() {
+        // Ruby's CFF2 source check: no internal planning id, no Unsupported class.
+        let font = sfnt(core(), &[b"CFF2"]);
+        let e = convert(&font, Target::Ttf, 0).expect_err("fails");
+        assert_eq!(e.class, ERROR_CLASS);
+        assert_eq!(
+            e.message,
+            "Conversion failed: Transformation failed: CFF2 font missing required CFF2 table"
+        );
+    }
+
+    #[test]
+    fn variable_font_without_gvar_or_cff2_keeps_fvar_through_convert() {
+        // `:static` to Ruby: the tables pass through, so the same source check applies.
+        let font = sfnt(core(), &[b"fvar", b"CFF "]);
+        let out = convert(&font, Target::Woff, 0).expect("converts");
+        assert!(out.starts_with(b"wOFF"));
     }
 }

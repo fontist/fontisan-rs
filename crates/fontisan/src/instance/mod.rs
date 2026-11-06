@@ -65,13 +65,6 @@ pub fn instance(input: &[u8], coords: &[([u8; 4], f64)]) -> Result<Vec<u8>, Conv
     Ok(write_font(&instance_tables(&tables, coords)?, 0x0001_0000))
 }
 
-/// A variable font with neither gvar nor CFF2 is `:static` to Ruby's
-/// `FormatDetector#variation_type`: `resolve_static_font` hands every table
-/// through, fvar/avar/HVAR/MVAR/STAT/DSIG included. (The name is historical.)
-pub(crate) fn drop_variation_tables(tables: Tables) -> Tables {
-    tables
-}
-
 fn get<'a>(t: &'a Tables, tag: &[u8; 4]) -> Option<&'a Vec<u8>> {
     t.iter().find(|(k, _)| k == tag).map(|(_, v)| v)
 }
@@ -622,13 +615,5 @@ mod tests {
             assert_eq!(e.class, "Fontisan::MissingTableError", "{gone}");
             assert_eq!(e.message, format!("Font missing required {gone} table"));
         }
-    }
-
-    #[test]
-    fn variable_font_without_gvar_keeps_every_table() {
-        let all = tables(&[
-            b"fvar", b"avar", b"HVAR", b"MVAR", b"STAT", b"DSIG", b"glyf",
-        ]);
-        assert_eq!(drop_variation_tables(all.clone()), all);
     }
 }
