@@ -108,10 +108,13 @@ fn malformed_goldens_match() {
                         "load",
                         json!({"outcome": "ok", "format": font.format().ruby_class()}),
                     );
-                    note("name", ok_or(font.name().map(|n| match n {
-                        Some(n) => json!({"outcome": "ok", "family": n.english_name(1)}),
-                        None => nil_table("english_name"),
-                    })));
+                    note(
+                        "name",
+                        ok_or(font.name().map(|n| match n {
+                            Some(n) => json!({"outcome": "ok", "family": n.english_name(1)}),
+                            None => nil_table("english_name"),
+                        })),
+                    );
                     note(
                         "table_head",
                         ok_or(font.head().map(|h| match h {
@@ -120,10 +123,15 @@ fn malformed_goldens_match() {
                         })),
                     );
                     if opts.mode == LoadingMode::Full {
-                        note("table_cmap", ok_or(font.cmap().map(|c| match c {
-                            Some(c) => json!({"outcome": "ok", "mappings": c.codepoints().len()}),
-                            None => nil_table("unicode_mappings"),
-                        })));
+                        note(
+                            "table_cmap",
+                            ok_or(font.cmap().map(|c| match c {
+                                Some(c) => {
+                                    json!({"outcome": "ok", "mappings": c.codepoints().len()})
+                                }
+                                None => nil_table("unicode_mappings"),
+                            })),
+                        );
                     }
                     // `read` carries a digest that needs outlines (1d): compare outcome only.
                     let read = match read_error(font) {
