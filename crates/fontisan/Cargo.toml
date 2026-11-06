@@ -6,6 +6,11 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "README.md"
+keywords = ["font", "opentype", "truetype", "woff2", "ttf"]
+categories = ["parser-implementations", "text-processing"]
+# Tests need the fetched corpus (.corpus) and benches need the ffi feature; neither ships.
+exclude = ["tests/", "benches/"]
 
 [features]
 default = []

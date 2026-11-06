@@ -3,6 +3,7 @@
 //! [`sfnt`] is the font model (card 1c); later cards add outlines, layout,
 //! audit and conversion. The crate also carries the C ABI scaffolding every
 //! entry point will use, behind the `ffi` feature.
+#![doc = include_str!("../README.md")]
 #![cfg_attr(not(feature = "ffi"), forbid(unsafe_code))]
 #![cfg_attr(feature = "ffi", deny(unsafe_code))]
 
