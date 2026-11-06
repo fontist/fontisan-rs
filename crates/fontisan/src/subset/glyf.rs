@@ -20,7 +20,12 @@ fn parse_loca(tables: &Tables, num_glyphs: u32) -> Result<Vec<usize>, SubsetErro
         )));
     }
     let loca = find(tables, "loca")
-        .ok_or_else(|| SubsetError::new("Fontisan::MissingTableError", "Table 'loca' not found"))?;
+        .ok_or_else(|| {
+            SubsetError::new(
+                "Fontisan::MissingTableError",
+                "Required table 'loca' not found in font",
+            )
+        })?;
     let count = num_glyphs as usize + 1;
     let mut offs = Vec::with_capacity(count);
     for i in 0..count {
@@ -270,7 +275,13 @@ pub(super) fn hmtx_metrics(
     raw: &[u8],
     num_glyphs: u32,
 ) -> Result<Vec<(u16, u16)>, SubsetError> {
-    let hhea = find(tables, "hhea").unwrap_or(&[]);
+    // Ruby reads `hhea.number_of_h_metrics` off a missing (nil) table.
+    let hhea = find(tables, "hhea").ok_or_else(|| {
+        SubsetError::new(
+            "NoMethodError",
+            "undefined method 'number_of_h_metrics' for nil",
+        )
+    })?;
     let nhm =
         u32::from(be16(hhea, 34).ok_or_else(|| SubsetError::corrupted("hhea table is too short"))?);
     if nhm < 1 {

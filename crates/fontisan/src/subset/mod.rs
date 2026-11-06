@@ -122,7 +122,9 @@ fn decode(input: &[u8]) -> Result<Vec<u8>, SubsetError> {
         Some(Format::Ttf | Format::Otf) => Ok(input.to_vec()),
         Some(Format::Woff) => crate::woff::decode_woff(input).map_err(|e| wrap(e.to_string())),
         Some(Format::Woff2) => {
-            crate::woff::decode_woff2_ruby_padding(input).map_err(|e| wrap(e.to_string()))
+            // Ruby's own WOFF2 rebuild (as convert does): it accepts a file whose last
+            // block lacks the 4-byte padding, which the strict decoder rejects.
+            crate::sfnt::woff2_view::single(input).map_err(|e| wrap(format!("{e:?}")))
         }
         Some(Format::Ttc | Format::Otc | Format::Woff2Collection) => Err(SubsetError::unsupported(
             "collection subsetting is not part of card 1i-subset",
@@ -263,12 +265,17 @@ pub fn glyph_ids_for(
 ) -> Result<Vec<u32>, SubsetError> {
     let font = sfnt::Font::from_bytes(input)
         .map_err(|e| SubsetError::new("Fontisan::Error", e.to_string()))?;
-    let map: std::collections::BTreeMap<u32, u32> = font
-        .cmap()
-        .ok()
-        .flatten()
-        .map(|c| c.mappings().into_iter().collect())
-        .unwrap_or_default();
+    // Ruby calls `unicode_mappings` on the cmap table: nil when it is absent.
+    let map: std::collections::BTreeMap<u32, u32> = match font.cmap() {
+        Ok(None) => {
+            return Err(SubsetError::new(
+                "NoMethodError",
+                "undefined method 'unicode_mappings' for nil",
+            ));
+        }
+        Ok(Some(c)) => c.mappings().into_iter().collect(),
+        Err(_) => Default::default(),
+    };
     let gids: BTreeSet<u32> = codepoints
         .iter()
         .filter_map(|c| map.get(c).copied())
@@ -280,4 +287,96 @@ pub fn glyph_ids_for(
         ));
     }
     Ok(gids.into_iter().collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn head() -> Vec<u8> {
+        vec![0; 54]
+    }
+    fn maxp() -> Vec<u8> {
+        let mut m = vec![0, 0, 0x50, 0, 0, 1];
+        m.resize(6, 0);
+        m
+    }
+    fn font(tables: &[(&[u8; 4], Vec<u8>)]) -> Vec<u8> {
+        let t: Tables = tables.iter().map(|(k, v)| (**k, v.clone())).collect();
+        write_font(&t, 0x0001_0000)
+    }
+    fn err(r: Result<Vec<u8>, SubsetError>) -> (String, String) {
+        let e = r.expect_err("subset should fail");
+        (e.class.to_string(), e.message)
+    }
+
+    #[test]
+    fn missing_hhea_reports_ruby_nil_method_error() {
+        let f = font(&[
+            (b"head", head()),
+            (b"maxp", maxp()),
+            (b"hmtx", vec![0; 4]),
+            (b"glyf", vec![]),
+            (b"loca", vec![0; 4]),
+        ]);
+        let (class, msg) = err(subset(&f, &[0], "web"));
+        assert_eq!(class, "Fontisan::SubsettingError");
+        assert_eq!(
+            msg,
+            "Failed to subset table 'hmtx': undefined method 'number_of_h_metrics' for nil"
+        );
+    }
+
+    #[test]
+    fn missing_loca_reports_required_table() {
+        let f = font(&[
+            (b"head", head()),
+            (b"maxp", maxp()),
+            (b"glyf", vec![]),
+        ]);
+        let (class, msg) = err(subset(&f, &[0], "web"));
+        assert_eq!(class, "Fontisan::MissingTableError");
+        assert_eq!(msg, "Required table 'loca' not found in font");
+    }
+
+    #[test]
+    fn missing_cmap_reports_ruby_nil_method_error() {
+        let f = font(&[(b"head", head()), (b"maxp", maxp())]);
+        let e = glyph_ids_for(&f, &[97], "x.ttf").expect_err("no cmap");
+        assert_eq!(e.class, "NoMethodError");
+        assert_eq!(e.message, "undefined method 'unicode_mappings' for nil");
+    }
+
+    #[test]
+    fn woff2_without_trailing_pad_is_accepted() {
+        // A table-dropped WOFF2 whose last block is not padded to 4 bytes:
+        // Ruby reads it, so subsetting must succeed too.
+        let mut hhea = vec![0; 36];
+        hhea[35] = 1;
+        let mut w2 = None;
+        for pad in 0..16usize {
+            let sfnt = font(&[
+                (b"head", head()),
+                (b"maxp", maxp()),
+                (b"hhea", hhea.clone()),
+                (b"hmtx", vec![0; 4]),
+                (b"glyf", vec![0; 12]),
+                (b"loca", vec![0, 0, 0, 6]),
+                (b"name", vec![1; pad]),
+            ]);
+            let enc = crate::convert::woff2::encode_woff2_with_quality(&sfnt, Some(0), 1).unwrap();
+            let mut cut = enc.clone();
+            while cut.len() % 4 == 0 && cut.last() == Some(&0) {
+                cut.pop();
+            }
+            if cut.len() % 4 != 0 && crate::woff::decode_woff2(&cut).is_err() {
+                w2 = Some(cut);
+                break;
+            }
+        }
+        let w2 = w2.expect("an unpadded woff2");
+        assert!(crate::woff::decode_woff2_ruby_padding(&w2).is_err());
+        let out = subset(&w2, &[0], "web").expect("subset of an unpadded woff2");
+        assert!(tables_of(&out).unwrap().1.iter().any(|(t, _)| t == b"glyf"));
+    }
 }
