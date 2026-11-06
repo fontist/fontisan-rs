@@ -18,6 +18,9 @@ use super::font::Font;
 /// A four-byte OpenType tag, compared and sorted as raw bytes (Ruby binary strings).
 pub type Tag = [u8; 4];
 
+/// One script tag with its feature tags.
+pub type ScriptFeatures = Vec<(Tag, Vec<Tag>)>;
+
 const HEADER: usize = 10;
 
 /// `GSUB` or `GPOS` (identical layouts for what the audit reads).
@@ -261,20 +264,28 @@ impl LayoutTable {
     /// and the total LangSys work is capped at `WORK_PER_BYTE` x the table
     /// length (see there), so the cost is linear in the table, not
     /// scripts x table length as calling `features` per script would be.
-    pub fn script_features(&self) -> Vec<(Tag, Vec<Tag>)> {
+    pub fn script_features(&self) -> ScriptFeatures {
+        self.script_features_metered().0
+    }
+
+    /// `script_features()` plus `(units used, budget)`; lets a test assert how
+    /// far real fonts sit from the cutoff.
+    #[doc(hidden)]
+    pub fn script_features_metered(&self) -> (ScriptFeatures, (usize, usize)) {
+        let total = self.table_data.len().saturating_mul(WORK_PER_BYTE);
         if self.script_list_offset == 0 {
-            return vec![];
+            return (vec![], (0, total));
         }
         let Some(list) = self.script_list() else {
-            return vec![];
+            return (vec![], (0, total));
         };
         let Ok(scripts) = tag_list(list) else {
-            return vec![];
+            return (vec![], (0, total));
         };
         let features = self.feature_records();
         let mut memo: HashMap<Tag, Vec<Tag>> = HashMap::new();
-        let mut budget = self.table_data.len().saturating_mul(WORK_PER_BYTE);
-        scripts
+        let mut budget = total;
+        let out = scripts
             .iter()
             .map(|&(tag, offset)| {
                 let f = memo.entry(tag).or_insert_with(|| match &features {
@@ -283,7 +294,8 @@ impl LayoutTable {
                 });
                 (tag, f.clone())
             })
-            .collect()
+            .collect();
+        (out, (total - budget, total))
     }
 }
 

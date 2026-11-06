@@ -284,6 +284,7 @@ fn generated_tables_match_reference() {
 fn corpus_layout_tables_match_reference() {
     let Some(corpus) = corpus() else { return };
     let (mut tables, mut fonts) = (0, 0);
+    let mut worst = (0.0f64, String::new());
     for d in ["fonts", "derived"] {
         let Ok(rd) = std::fs::read_dir(corpus.join(d)) else {
             continue;
@@ -301,10 +302,23 @@ fn corpus_layout_tables_match_reference() {
                     if let Some(raw) = font.table_data(tag) {
                         assert!(same(raw), "{} {tag}", e.path().display());
                         tables += 1;
+                        let t = LayoutTable::from_bytes(raw).unwrap();
+                        let (_, (used, budget)) = t.script_features_metered();
+                        let ratio = used as f64 / budget.max(1) as f64;
+                        if ratio > worst.0 {
+                            worst = (ratio, format!("{} {tag}", e.path().display()));
+                        }
                     }
                 }
             }
         }
     }
     eprintln!("corpus faces: {fonts}, layout tables: {tables}");
+    eprintln!("max work/budget ratio: {:.6} ({})", worst.0, worst.1);
+    assert!(
+        worst.0 < 0.25,
+        "a real font uses {:.3} of the layout work budget: {}",
+        worst.0,
+        worst.1
+    );
 }

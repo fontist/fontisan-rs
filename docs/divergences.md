@@ -29,6 +29,20 @@ and pin the measured output.
   table whose checksum mismatches.
 - Measured with: `bundle exec ruby -Ilib -e 'require "fontisan"; require "json"; puts JSON.generate(Fontisan::Reference.audit("corpus/derived/malformed-bad-checksum.ttf", validate: true))'`
 
+## Pathological GSUB/GPOS tables past the work budget return `[]` for the remaining scripts
+
+- Ruby resolves every script's features independently, so a table whose scripts each
+  point at thousands of LangSys records costs scripts x table length. The fuzz seed
+  `fuzz/seeds/timeout-font-layout-scripts.ttf` (165 KB parsed as a table body: 18,176
+  scripts, about 65.8M LangSys records reachable) takes Ruby minutes and took the Rust
+  port 61 s before the fix.
+- Rust: `LayoutTable::script_features()` caps the LangSys work (records plus newly read
+  words) at 2 units per table byte. Past the cap the remaining scripts read as a failed
+  read, `[]`, where Ruby would eventually resolve them. `features(script)` for a single
+  script is unbudgeted (it is bounded by the table itself).
+- A real font cannot reach the cutoff: `layout_equivalence` asserts every corpus font
+  stays under 25% of the budget.
+
 ## Follow-up (fontisan repo, not done here)
 
 Add both cases to the Phase 0 goldens: a read golden for a WOFF1 font with a
