@@ -19,8 +19,12 @@ fn parse_loca(tables: &Tables, num_glyphs: u32) -> Result<Vec<usize>, SubsetErro
             "numGlyphs must be >= 1, got: {num_glyphs}"
         )));
     }
-    let loca = find(tables, "loca")
-        .ok_or_else(|| SubsetError::new("Fontisan::MissingTableError", "Table 'loca' not found"))?;
+    let loca = find(tables, "loca").ok_or_else(|| {
+        SubsetError::new(
+            "Fontisan::MissingTableError",
+            "Required table 'loca' not found in font",
+        )
+    })?;
     let count = num_glyphs as usize + 1;
     let mut offs = Vec::with_capacity(count);
     for i in 0..count {
@@ -73,6 +77,7 @@ fn components_of(glyf: &[u8], loca: &[usize], gid: u32) -> Result<Option<Vec<u32
     }
     let nc = i16::from_be_bytes([d[0], d[1]]);
     if nc >= 0 {
+        parse_simple(d, gid, nc as usize)?;
         return Ok(None);
     }
     if nc != -1 {
@@ -118,6 +123,83 @@ fn components_of(glyf: &[u8], loca: &[usize], gid: u32) -> Result<Option<Vec<u32
         }
     }
     Ok(Some(out))
+}
+
+/// `Tables::SimpleGlyph.parse`: Ruby parses (and validates) every simple glyph the
+/// closure visits, so a glyph with a short instruction, flag or coordinate run is a
+/// `CorruptedTableError` even though the subsetter copies the bytes unchanged.
+fn parse_simple(d: &[u8], gid: u32, contours: usize) -> Result<(), SubsetError> {
+    let short =
+        |what: &str| SubsetError::corrupted(format!("Insufficient {what} for simple glyph {gid}"));
+    let mut p = 10usize; // header length was checked by the caller
+    let mut ends: Vec<usize> = Vec::new();
+    if contours > 0 {
+        let raw = d
+            .get(p..p + contours * 2)
+            .ok_or_else(|| short("contour end data"))?;
+        ends = raw
+            .chunks_exact(2)
+            .map(|b| usize::from(u16::from_be_bytes([b[0], b[1]])))
+            .collect();
+        p += contours * 2;
+    }
+    let il = d
+        .get(p..p + 2)
+        .ok_or_else(|| short("instruction length data"))?;
+    let il = usize::from(u16::from_be_bytes([il[0], il[1]]));
+    p += 2;
+    if il > 0 {
+        if d.len() < p + il {
+            return Err(short("instruction data"));
+        }
+        p += il;
+    }
+    if contours == 0 {
+        return Ok(());
+    }
+    let total = ends[contours - 1] + 1;
+    let mut flags: Vec<u8> = Vec::new();
+    while flags.len() < total {
+        let f = *d.get(p).ok_or_else(|| short("flag data"))?;
+        p += 1;
+        flags.push(f);
+        if f & 0x08 != 0 {
+            let n = *d.get(p).ok_or_else(|| {
+                SubsetError::corrupted(format!("Missing repeat count for simple glyph {gid}"))
+            })?;
+            p += 1;
+            flags.extend(std::iter::repeat_n(f, usize::from(n)));
+        }
+    }
+    if flags.len() != total {
+        return Err(SubsetError::corrupted(format!(
+            "Flag count mismatch for simple glyph {gid}: expected {total}, got {}",
+            flags.len()
+        )));
+    }
+    for (axis, short_bit, same_bit) in [("x", 0x02u8, 0x10u8), ("y", 0x04, 0x20)] {
+        for (i, f) in flags.iter().enumerate() {
+            let need = if f & short_bit != 0 {
+                1
+            } else if f & same_bit != 0 {
+                0
+            } else {
+                2
+            };
+            if d.len() < p + need {
+                return Err(SubsetError::corrupted(format!(
+                    "Insufficient {axis} coordinate data for simple glyph {gid} at point {i}"
+                )));
+            }
+            p += need;
+        }
+    }
+    if ends.windows(2).any(|w| w[1] <= w[0]) {
+        return Err(SubsetError::corrupted(format!(
+            "Invalid contour end points for simple glyph {gid}: not monotonically increasing"
+        )));
+    }
+    Ok(())
 }
 
 /// `GlyphAccessor#closure_for` (with notdef first).
@@ -270,7 +352,13 @@ pub(super) fn hmtx_metrics(
     raw: &[u8],
     num_glyphs: u32,
 ) -> Result<Vec<(u16, u16)>, SubsetError> {
-    let hhea = find(tables, "hhea").unwrap_or(&[]);
+    // Ruby reads `hhea.number_of_h_metrics` off a missing (nil) table.
+    let hhea = find(tables, "hhea").ok_or_else(|| {
+        SubsetError::new(
+            "NoMethodError",
+            "undefined method 'number_of_h_metrics' for nil",
+        )
+    })?;
     let nhm =
         u32::from(be16(hhea, 34).ok_or_else(|| SubsetError::corrupted("hhea table is too short"))?);
     if nhm < 1 {

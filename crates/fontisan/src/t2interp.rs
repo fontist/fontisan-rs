@@ -14,6 +14,9 @@ pub(crate) enum Seg {
 type R<T> = Result<T, String>;
 
 const MAX_DEPTH: usize = 64;
+/// Total operators and operands one charstring (subroutines included) may
+/// execute. Real glyphs need hundreds; this only stops exponential subr fan-out.
+const MAX_OPS: usize = 1 << 20;
 
 pub(crate) struct Interp<'a> {
     gsubrs: &'a [&'a [u8]],
@@ -28,6 +31,7 @@ pub(crate) struct Interp<'a> {
     stems: usize,
     transient: Vec<f64>,
     depth: usize,
+    ops: usize,
 }
 
 fn bias(n: Option<usize>) -> usize {
@@ -137,6 +141,7 @@ impl<'a> Interp<'a> {
             stems: 0,
             transient: vec![],
             depth: 0,
+            ops: 0,
         }
     }
 
@@ -149,6 +154,10 @@ impl<'a> Interp<'a> {
         let mut pos = 0;
         let mut width_parsed = sub;
         while pos < data.len() {
+            self.ops += 1;
+            if self.ops > MAX_OPS {
+                return Err("charstring operation budget exceeded".into());
+            }
             let b = data[pos];
             pos += 1;
             if b <= 31 && b != 28 {
@@ -573,5 +582,48 @@ mod tests {
         let mut it = Interp::new(&[], Some(&subs));
         it.run_main(&[32, 10]).unwrap();
         assert!(it.path.is_empty(), "rlineto saw only one operand");
+    }
+}
+
+#[cfg(test)]
+mod budget_tests {
+    use super::*;
+
+    /// Global subr i calls subr i+1 twice (the #158 break-test font shape):
+    /// 2^n operations without an operation budget.
+    fn fan_out(n: usize) -> Vec<Vec<u8>> {
+        let mut v: Vec<Vec<u8>> = (0..n)
+            .map(|i| {
+                let arg = u8::try_from(i + 1 + 139 - 107).unwrap();
+                vec![arg, 29, arg, 29] // `<i+1> callgsubr` twice
+            })
+            .collect();
+        v.push(vec![11]); // return
+        v
+    }
+
+    fn run(n: usize) -> (R<()>, std::time::Duration) {
+        let subrs = fan_out(n);
+        let refs: Vec<&[u8]> = subrs.iter().map(Vec::as_slice).collect();
+        let mut it = Interp::new(&refs, None);
+        let start = std::time::Instant::now();
+        // `-107 callgsubr`: enter subr 0
+        let r = it.run_main(&[32, 29]);
+        (r, start.elapsed())
+    }
+
+    #[test]
+    fn exponential_subr_fan_out_fails_fast_with_an_error() {
+        let (r, took) = run(60);
+        let e = r.unwrap_err();
+        assert!(e.contains("budget"), "{e}");
+        assert!(took < std::time::Duration::from_secs(2), "{took:?}");
+    }
+
+    #[test]
+    fn a_legitimate_fan_out_still_runs() {
+        // 2^12 calls: well inside the budget.
+        let (r, _) = run(12);
+        assert!(r.is_ok(), "{r:?}");
     }
 }

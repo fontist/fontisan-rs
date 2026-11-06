@@ -75,6 +75,15 @@ fn ttc_members(input: &[u8]) -> Result<Vec<Member>, ConvertError> {
     Ok(out)
 }
 
+/// Face 0 of a `ttcf` file as a standalone sfnt (what Ruby's loader hands the subsetter).
+pub(crate) fn first_face(input: &[u8]) -> Result<Vec<u8>, ConvertError> {
+    let member = ttc_members(input)?
+        .into_iter()
+        .next()
+        .ok_or_else(|| fail("collection index out of range"))?;
+    Ok(super::write_font(&member.tables, member.sfnt_version))
+}
+
 /// Members of a WOFF2 collection, as `Woff2Collection#font` rebuilds them.
 fn woff2_members(input: &[u8]) -> Result<Vec<Member>, ConvertError> {
     let count = match crate::sfnt::woff2_view::collection(input, usize::MAX)
@@ -493,5 +502,23 @@ pub(crate) fn convert(
             "ArgumentError",
             "Target format is not a collection format. Use ttc, otc, or dfont for collection conversion.",
         )),
+    }
+}
+
+#[cfg(test)]
+mod first_face_tests {
+    use super::*;
+
+    #[test]
+    fn first_face_is_member_zero_as_a_standalone_sfnt() {
+        let member = |tag: &[u8; 4]| Member {
+            sfnt_version: SFNT_TRUETYPE,
+            tables: vec![(*tag, vec![1, 2, 3, 4])],
+        };
+        let ttc = build_ttc(&[member(b"AAAA"), member(b"BBBB")]);
+        let face = first_face(&ttc).expect("face 0");
+        let (version, tables) = tables_of(&face).unwrap();
+        assert_eq!(version, SFNT_TRUETYPE);
+        assert_eq!(tables, vec![(*b"AAAA", vec![1, 2, 3, 4])]);
     }
 }

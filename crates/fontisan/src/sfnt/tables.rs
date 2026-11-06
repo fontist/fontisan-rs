@@ -380,8 +380,20 @@ impl Post {
     /// Glyph names as Ruby's `Post#glyph_names`: standard names for 1.0, the
     /// format-2 index/Pascal-string list for 2.0, empty otherwise.
     pub fn glyph_names(&self) -> Vec<String> {
+        self.glyph_names_raw()
+            .into_iter()
+            .map(|b| String::from_utf8_lossy(&b).into_owned())
+            .collect()
+    }
+
+    /// The same names as raw bytes: Ruby's custom names are binary strings, so a
+    /// name that is not UTF-8 must reach the digest unchanged.
+    pub fn glyph_names_raw(&self) -> Vec<Vec<u8>> {
         if self.version_raw == POST_VERSION_1_0 {
-            return STANDARD_NAMES.iter().map(|s| s.to_string()).collect();
+            return STANDARD_NAMES
+                .iter()
+                .map(|s| s.as_bytes().to_vec())
+                .collect();
         }
         if self.version_raw != POST_VERSION_2_0 || self.remaining_data.is_empty() {
             return Vec::new();
@@ -410,12 +422,12 @@ impl Post {
             .into_iter()
             .map(|i| {
                 if i < 258 {
-                    STANDARD_NAMES[i].to_string()
+                    STANDARD_NAMES[i].as_bytes().to_vec()
                 } else {
                     custom
                         .get(i - 258)
-                        .map(|b| String::from_utf8_lossy(b).into_owned())
-                        .unwrap_or_else(|| ".notdef".to_string())
+                        .map(|b| b.to_vec())
+                        .unwrap_or_else(|| b".notdef".to_vec())
                 }
             })
             .collect()
@@ -510,4 +522,21 @@ fn decode_utf16be(d: &[u8]) -> String {
         s.push('\u{fffd}');
     }
     s
+}
+
+#[cfg(test)]
+mod post_name_tests {
+    use super::*;
+
+    /// flip_post: a custom glyph name that is not UTF-8 stays raw bytes (Ruby reads it
+    /// as a binary string), so the digest over the joined names matches Ruby's.
+    #[test]
+    fn version_2_custom_name_keeps_non_utf8_bytes() {
+        let mut raw = vec![0, 2, 0, 0];
+        raw.extend_from_slice(&[0; 28]);
+        raw.extend_from_slice(&[0, 1, 1, 2]); // one glyph, index 258
+        raw.extend_from_slice(&[2, 0xFF, 0x80]);
+        let p = Post::parse(&raw).unwrap();
+        assert_eq!(p.glyph_names_raw(), vec![vec![0xFF, 0x80]]);
+    }
 }

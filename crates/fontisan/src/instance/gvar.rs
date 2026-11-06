@@ -66,7 +66,12 @@ impl<'a> Gvar<'a> {
         if last <= first {
             return Ok(Vec::new());
         }
-        let g = sl(self.data, self.array_offset + first, last - first)?;
+        // Ruby slices `@data[start, len]`, which clamps a length that runs past the
+        // table. A start beyond the table is nil there (a NoMethodError crash), so
+        // that stays a typed error here.
+        let start = self.array_offset.checked_add(first).ok_or_else(bad)?;
+        let end = start.saturating_add(last - first).min(self.data.len());
+        let g = self.data.get(start..end).ok_or_else(bad)?;
         self.parse_glyph(g, point_count)
     }
 
@@ -197,4 +202,35 @@ fn read_deltas(d: &[u8], mut pos: usize, count: usize) -> R<(Vec<i32>, usize)> {
     }
     out.truncate(count);
     Ok((out, pos))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn glyph_range_past_the_table_is_clamped_like_ruby_slicing() {
+        // 1 axis, no shared tuples, 1 glyph, short offsets, data array at 24. The
+        // glyph claims 64 bytes but the table ends after 4 (tuple count 0).
+        let mut d = vec![0u8; 20];
+        d[5] = 1;
+        d[13] = 1;
+        d[19] = 24;
+        d.extend([0, 0, 0, 32]);
+        d.extend([0, 0, 0, 4]);
+        let g = Gvar::new(&d).unwrap();
+        assert!(g.tuples_for(0, 4).unwrap().is_empty());
+    }
+
+    #[test]
+    fn glyph_range_starting_past_the_table_is_an_error() {
+        // Ruby's nil slice is a NoMethodError crash; here it stays a typed error.
+        let mut d = vec![0u8; 20];
+        d[5] = 1;
+        d[13] = 1;
+        d[19] = 100;
+        d.extend([0, 0, 0, 32]);
+        let g = Gvar::new(&d).unwrap();
+        assert!(g.tuples_for(0, 4).is_err());
+    }
 }

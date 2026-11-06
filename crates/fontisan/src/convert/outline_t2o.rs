@@ -44,8 +44,8 @@ pub(crate) fn convert_ttf_to_otf(tables: &Tables) -> Result<Tables, ConvertError
     let name_tbl = table(tables, b"name").map(|d| name::Name::parse(d));
     let font_name = match name_tbl.as_ref().and_then(|n| n.english(1)) {
         Some(n) => n,
-        // Ruby falls back to a UTF-8 "UnnamedFont", which IndexBuilder rejects.
-        None => return Err(fail("item 0 must have BINARY encoding, got: UTF-8".into())),
+        // Ruby falls back to the binary "UnnamedFont" (since 9716f23).
+        None => b"UnnamedFont".to_vec(),
     };
     let cff_data = cff::cff_table(&charstrings, font_name);
 
@@ -70,6 +70,14 @@ pub(crate) fn validate_output(tables: &Tables) -> Result<(), ConvertError> {
     let mut errors: Vec<&str> = Vec::new();
     const NAME: &str = "Table 'name' failed validation";
     const CMAP: &str = "Table 'cmap' failed validation";
+    // Ruby's required_tables structure check, then the per-table rule groups:
+    // name, OS/2, post, cmap. A missing table repeats its message once per rule
+    // that needs it (name 4, OS/2 5, post 1, cmap 3), measured by the sweep.
+    let missing = |t: &[u8; 4]| table(tables, t).is_none();
+    if missing(b"name") {
+        errors.push("Font structure validation failed for check 'required_tables'");
+        errors.extend(["Required table 'name' is missing"; 4]);
+    }
     if let Some(d) = table(tables, b"name") {
         let n = name::Name::parse(d);
         // basic: name_version, family_name, postscript_name
@@ -91,6 +99,15 @@ pub(crate) fn validate_output(tables: &Tables) -> Result<(), ConvertError> {
         if !n.has_combo(3, 1, 0x0409) {
             errors.push(NAME);
         }
+    }
+    if missing(b"OS/2") {
+        errors.extend(["Required table 'OS/2' is missing"; 5]);
+    }
+    if missing(b"post") {
+        errors.push("Required table 'post' is missing");
+    }
+    if missing(b"cmap") {
+        errors.extend(["Required table 'cmap' is missing"; 3]);
     }
     if let Some(d) = table(tables, b"cmap") {
         // cmap_subtables, cmap_unicode_mapping, cmap_format4: an empty or
