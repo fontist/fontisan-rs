@@ -70,7 +70,10 @@ pub fn extract(input: &[u8], index: usize) -> Result<Extracted, ConvertError> {
         }
         out[12 + 16 * i + 8..12 + 16 * i + 12].copy_from_slice(&(pos as u32).to_be_bytes());
     }
-    if let Some(toff) = head_entry_offset {
+    // A `head` offset past the end of the collection has no table behind it; Ruby would
+    // seek there and grow the file to that offset (up to 4 GiB from a 100-byte input),
+    // so the adjustment is skipped instead. Real fonts always have `head` inside the file.
+    if let Some(toff) = head_entry_offset.filter(|t| t.saturating_add(12) <= input.len()) {
         // Ruby writes the adjustment at the member's ORIGINAL head offset + 8.
         super::writer::set_checksum_adjustment(&mut out, toff + 8);
     }
@@ -95,4 +98,24 @@ pub fn extract(input: &[u8], index: usize) -> Result<Extracted, ConvertError> {
         basename: format!("{base}{ext}"),
         data: out,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::extract;
+
+    /// Found by the 1j-abi mutation run: a `head` directory offset near u32::MAX made
+    /// `set_checksum_adjustment` resize the output to ~4 GiB.
+    #[test]
+    fn head_offset_past_the_collection_does_not_grow_the_output() {
+        let mut ttc = b"ttcf".to_vec();
+        ttc.extend([0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 16]);
+        ttc.extend([0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]); // sfnt header, one table
+        ttc.extend(b"head");
+        ttc.extend([0; 4]);
+        ttc.extend(0xFFFF_FFF0u32.to_be_bytes());
+        ttc.extend(54u32.to_be_bytes());
+        let out = extract(&ttc, 0).expect("extract");
+        assert!(out.data.len() < 1024, "output grew to {}", out.data.len());
+    }
 }

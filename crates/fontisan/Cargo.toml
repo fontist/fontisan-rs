@@ -51,3 +51,7 @@ required-features = ["ffi"]
 [[test]]
 name = "ffi_read_ops"
 required-features = ["ffi"]
+
+[[test]]
+name = "fuzz_mutation"
+required-features = ["ffi"]

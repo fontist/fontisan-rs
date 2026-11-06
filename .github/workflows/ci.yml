@@ -89,7 +89,7 @@ jobs:
   # Card 1j-parsers: coverage-guided fuzzing of every binary parser entry, one matrix leg
   # per target (fuzz/fuzz_targets/*), each on a fixed time budget. A crash or hang fails the
   # leg and uploads the reproducer. The same bodies also run on stable as
-  # crates/fontisan/tests/fuzz_mutation.rs. C ABI targets are card 1j-abi.
+  # crates/fontisan/tests/fuzz_mutation.rs. The ffi_* targets (card 1j-abi) drive every extern "C" symbol and every op through fontisan_call.
   fuzz:
     name: fuzz ${{ matrix.target }}
     runs-on: ubuntu-latest
@@ -97,7 +97,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [font_load, font_tables, font_outlines, font_variations, font_layout, woff1, woff2, woff2_collection, audit_loaded]
+        target: [font_load, font_tables, font_outlines, font_variations, font_layout, woff1, woff2, woff2_collection, audit_loaded, ffi_echo, ffi_convert, ffi_extract, ffi_woff2_encode, ffi_subset, ffi_instance, ffi_read, ffi_audit, ffi_scan, ffi_audit_dir, ffi_header]
     env:
       FUZZ_SECONDS: 60
     steps:

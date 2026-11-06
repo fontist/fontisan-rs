@@ -203,6 +203,107 @@ fn seeds_are_committed_and_cover_every_target() {
     assert_eq!(on_disk, listed);
 }
 
+fn rust_sources(dir: &Path, out: &mut Vec<PathBuf>) {
+    for e in fs::read_dir(dir).unwrap() {
+        let p = e.unwrap().path();
+        if p.is_dir() {
+            rust_sources(&p, out);
+        } else if p.extension().is_some_and(|x| x == "rs") {
+            out.push(p);
+        }
+    }
+}
+
+/// Words following `needle` at the start of each non-comment line's match.
+fn idents_after(src: &str, needle: &str) -> Vec<String> {
+    src.lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .filter_map(|l| l.split_once(needle).map(|(_, r)| r))
+        .map(|r| {
+            r.chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                .collect()
+        })
+        .collect()
+}
+
+/// 1j-abi: every `extern "C"` function and every `OP_*` constant is fuzzed by a
+/// listed target, every listed target exists in all three places (TARGETS, the
+/// cargo-fuzz bin list, the CI matrix), and the tables name nothing stale.
+#[test]
+fn every_extern_symbol_and_op_is_fuzzed() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut files = Vec::new();
+    rust_sources(&root.join("../../crates"), &mut files);
+    files.sort();
+    files.dedup();
+    let mut symbols = Vec::new();
+    let mut ops = Vec::new();
+    for f in &files {
+        let src = fs::read_to_string(f).unwrap();
+        symbols.extend(idents_after(&src, "extern \"C\" fn "));
+        if f.ends_with("src/ffi/mod.rs") {
+            ops.extend(
+                idents_after(&src, "pub const ")
+                    .into_iter()
+                    .filter(|n| n.starts_with("OP_")),
+            );
+        }
+    }
+    symbols.sort();
+    symbols.dedup();
+    ops.sort();
+    ops.dedup();
+    let mut listed: Vec<&str> = bodies::EXTERN_SYMBOLS.iter().map(|(n, _)| *n).collect();
+    listed.sort();
+    assert_eq!(
+        symbols, listed,
+        "extern \"C\" symbols in the crate vs EXTERN_SYMBOLS"
+    );
+    assert!(symbols.len() >= 3, "symbol scan found {symbols:?}");
+    let mut listed_ops: Vec<&str> = bodies::OPS.iter().map(|(n, _, _)| *n).collect();
+    listed_ops.sort();
+    assert_eq!(ops, listed_ops, "OP_* constants in ffi/mod.rs vs OPS");
+    let mut values: Vec<u32> = bodies::OPS.iter().map(|(_, v, _)| *v).collect();
+    values.sort();
+    values.dedup();
+    assert_eq!(values.len(), bodies::OPS.len(), "two ops share a value");
+
+    let cargo = fs::read_to_string(root.join("../../fuzz/Cargo.toml")).unwrap();
+    let ci = fs::read_to_string(root.join("../../.github/workflows/ci.yml")).unwrap();
+    let matrix = ci
+        .lines()
+        .find(|l| l.trim_start().starts_with("target: ["))
+        .expect("fuzz matrix line");
+    let matrix: Vec<&str> = matrix
+        .split(['[', ']', ','])
+        .skip(1)
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .collect();
+    let mut want: Vec<&str> = bodies::TARGETS.iter().map(|(n, _)| *n).collect();
+    want.sort();
+    let mut got = matrix.clone();
+    got.sort();
+    assert_eq!(got, want, "CI fuzz matrix vs TARGETS");
+    for name in &want {
+        assert!(
+            cargo.contains(&format!("name = \"{name}\"")),
+            "{name} missing from fuzz/Cargo.toml"
+        );
+    }
+    let in_targets = |t: &str| bodies::TARGETS.iter().any(|(n, _)| *n == t);
+    for (sym, targets) in bodies::EXTERN_SYMBOLS {
+        assert!(!targets.is_empty(), "{sym} has no fuzz target");
+        for t in *targets {
+            assert!(in_targets(t), "{sym} names unknown target {t}");
+        }
+    }
+    for (op, _, t) in bodies::OPS {
+        assert!(in_targets(t), "{op} names unknown target {t}");
+    }
+}
+
 #[test]
 fn no_parser_panics_on_seeds_or_mutations() {
     let rounds: usize = std::env::var("FONTISAN_FUZZ_ROUNDS")
@@ -236,6 +337,20 @@ fn no_parser_panics_on_seeds_or_mutations() {
         );
     }
     let _ = std::panic::take_hook();
+    let oks: Vec<usize> = bodies::OK_BY_OP
+        .iter()
+        .map(|c| c.load(std::sync::atomic::Ordering::Relaxed))
+        .collect();
+    eprintln!("fuzz_mutation: successful calls per op {oks:?}");
+    for (name, value, target) in bodies::OPS {
+        if bodies::NO_SUCCESS_SEED.contains(value) {
+            continue;
+        }
+        assert!(
+            oks[*value as usize] > 0,
+            "{target}: {name} never succeeded, its well-formed request is broken"
+        );
+    }
     eprintln!(
         "fuzz_mutation: {runs} target runs, {} failures",
         failures.len()

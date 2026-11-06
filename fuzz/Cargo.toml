@@ -13,7 +13,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-fontisan = { path = "../crates/fontisan" }
+fontisan = { path = "../crates/fontisan", features = ["ffi"] }
 
 [profile.release]
 debug = 1
@@ -78,6 +78,83 @@ bench = false
 [[bin]]
 name = "audit_loaded"
 path = "fuzz_targets/audit_loaded.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ffi_echo"
+path = "fuzz_targets/ffi_echo.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ffi_convert"
+path = "fuzz_targets/ffi_convert.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ffi_extract"
+path = "fuzz_targets/ffi_extract.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ffi_woff2_encode"
+path = "fuzz_targets/ffi_woff2_encode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ffi_subset"
+path = "fuzz_targets/ffi_subset.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ffi_instance"
+path = "fuzz_targets/ffi_instance.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ffi_read"
+path = "fuzz_targets/ffi_read.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ffi_audit"
+path = "fuzz_targets/ffi_audit.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ffi_scan"
+path = "fuzz_targets/ffi_scan.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ffi_audit_dir"
+path = "fuzz_targets/ffi_audit_dir.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ffi_header"
+path = "fuzz_targets/ffi_header.rs"
 test = false
 doc = false
 bench = false
