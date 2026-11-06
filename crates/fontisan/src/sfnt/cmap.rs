@@ -103,6 +103,12 @@ fn format12(d: &[u8], m: &mut BTreeMap<u32, u32>) {
     if length > d.len() {
         return;
     }
+    // Ruby maps every group code by code, a later group overwriting an earlier one.
+    // Overlapping groups, each spanning most of the codepoint range, make that
+    // quadratic (fuzz: ~13 s debug for 3k groups). Same result in one pass: walk the
+    // groups last to first and fill only codes no later group has claimed, found
+    // through a "next unclaimed code" union-find.
+    let mut spans = Vec::new();
     let mut off = 16usize;
     for _ in 0..groups {
         if off + 12 > length {
@@ -113,14 +119,42 @@ fn format12(d: &[u8], m: &mut BTreeMap<u32, u32>) {
         else {
             break;
         };
-        for code in start..=end.min(MAX_CODEPOINT) {
-            let glyph = gid as u64 + (code - start) as u64;
-            if glyph != 0 {
-                m.insert(code, glyph.min(u32::MAX as u64) as u32);
-            }
-        }
+        spans.push((start, end.min(MAX_CODEPOINT), gid));
         off += 12;
     }
+    let mut next: Vec<u32> = Vec::new();
+    for &(start, end, gid) in spans.iter().rev() {
+        if start > end {
+            continue;
+        }
+        if next.is_empty() {
+            next = (0..=MAX_CODEPOINT + 1).collect();
+        }
+        // Glyph 0 is never stored, so it must not claim its code for earlier groups.
+        let mut code = if gid == 0 { start + 1 } else { start };
+        while code <= end {
+            let c = find(&mut next, code);
+            if c > end {
+                break;
+            }
+            m.insert(
+                c,
+                (gid as u64 + (c - start) as u64).min(u32::MAX as u64) as u32,
+            );
+            next[c as usize] = c + 1;
+            code = c + 1;
+        }
+    }
+}
+
+/// Union-find root: the smallest unclaimed code at or above `x` (path halving).
+fn find(next: &mut [u32], mut x: u32) -> u32 {
+    while next[x as usize] != x {
+        let p = next[x as usize];
+        next[x as usize] = next[p as usize];
+        x = next[x as usize];
+    }
+    x
 }
 
 impl Cmap {
@@ -224,6 +258,45 @@ mod tests {
         let cps = Cmap::parse(&raw).unwrap().codepoints();
         assert_eq!(cps.len(), 0x11_0000);
         assert_eq!(cps.last(), Some(&0x10_FFFF));
+    }
+
+    /// fuzz finding (font_tables, mutated SourceSans3): thousands of overlapping
+    /// format 12 groups, each spanning the codepoint range, must not be walked code
+    /// by code per group, and must still give the last-group-wins mapping.
+    #[test]
+    fn format_12_overlapping_groups_are_linear_and_last_wins() {
+        let groups: u32 = 6000;
+        let mut raw = vec![0, 0, 0, 1, 0, 3, 0, 10, 0, 0, 0, 12];
+        raw.extend_from_slice(&[0, 12, 0, 0]);
+        raw.extend_from_slice(&(16 + 12 * groups).to_be_bytes());
+        raw.extend_from_slice(&0u32.to_be_bytes());
+        raw.extend_from_slice(&groups.to_be_bytes());
+        for g in 0..groups {
+            for v in [0u32, 0x10_FFFF, 1 + g] {
+                raw.extend_from_slice(&v.to_be_bytes());
+            }
+        }
+        let t = std::time::Instant::now();
+        let m = Cmap::parse(&raw).unwrap().mappings();
+        assert!(t.elapsed().as_secs() < 10, "took {:?}", t.elapsed());
+        assert_eq!(m.len(), 0x11_0000);
+        assert_eq!(m[0], (0, groups));
+        assert_eq!(m[0x10_FFFF], (0x10_FFFF, groups + 0x10_FFFF));
+    }
+
+    /// A glyph-0 code in a later group leaves the earlier group's mapping in place.
+    #[test]
+    fn format_12_glyph_zero_does_not_erase_earlier_group() {
+        let mut raw = vec![0, 0, 0, 1, 0, 3, 0, 10, 0, 0, 0, 12];
+        raw.extend_from_slice(&[0, 12, 0, 0]);
+        raw.extend_from_slice(&(16u32 + 24).to_be_bytes());
+        raw.extend_from_slice(&0u32.to_be_bytes());
+        raw.extend_from_slice(&2u32.to_be_bytes());
+        for v in [10u32, 12, 100, 10, 11, 0] {
+            raw.extend_from_slice(&v.to_be_bytes());
+        }
+        let m = Cmap::parse(&raw).unwrap().mappings();
+        assert_eq!(m, vec![(10, 100), (11, 1), (12, 102)]);
     }
 
     /// Format 4 subtable for the segments `(start, end, delta)` plus the 0xFFFF
