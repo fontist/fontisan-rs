@@ -2,7 +2,7 @@
 //! Field semantics follow the canonical JSON: absent facts are `None`, and empty
 //! lists are omitted when the report is rendered (`axes` is always present).
 use super::types::Issue;
-use crate::sfnt::{Error, ErrorClass, Font, LoadingMode, Options, Tag, detect_format, face_count};
+use crate::sfnt::{Error, Font, LoadingMode, Options, Tag, detect_format, face_count};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::fmt::Write;
@@ -74,14 +74,6 @@ pub struct Report {
     pub validation_summary: Option<Summary>,
 }
 
-fn nil(method: &str) -> Error {
-    Error {
-        class: ErrorClass::NoMethod,
-        message: format!("undefined method '{method}' for nil"),
-        cause: None,
-    }
-}
-
 fn tag_str(t: &Tag) -> String {
     String::from_utf8_lossy(t).into_owned()
 }
@@ -144,22 +136,21 @@ pub fn build_report(
         validation_issues: None,
         validation_summary: None,
     };
+    // A table listed in the directory but unreadable is `None` here (Ruby: nil
+    // from `face.table`). Its section stays empty, as for an absent table.
     // identity
-    if face.has_table("name") {
-        let name = face.name()?.ok_or_else(|| nil("english_name"))?;
+    if let Some(name) = face.name()? {
         r.family_name = name.english_name(1);
         r.subfamily_name = name.english_name(2);
         r.full_name = name.english_name(4);
         r.postscript_name = name.english_name(6);
         r.version = name.english_name(5);
-        if face.has_table("head") {
-            let head = face.head()?.ok_or_else(|| nil("font_revision"))?;
+        if let Some(head) = face.head()? {
             r.font_revision_raw = Some(head.font_revision_raw);
         }
     }
     // style
-    if face.has_table("OS/2") {
-        let os2 = face.os2()?.ok_or_else(|| nil("us_weight_class"))?;
+    if let Some(os2) = face.os2()? {
         r.weight_class = Some(os2.us_weight_class);
         r.width_class = Some(os2.us_width_class);
         r.italic = os2.fs_selection & 0x01 != 0;
@@ -172,14 +163,12 @@ pub fn build_report(
                 .join(" "),
         );
     }
-    if face.has_table("head") {
-        let head = face.head()?.ok_or_else(|| nil("mac_style"))?;
+    if let Some(head) = face.head()? {
         r.italic |= head.mac_style & 0x02 != 0;
         r.bold |= head.mac_style & 0x01 != 0;
     }
-    if face.has_table("fvar") {
+    if let Some(fvar) = face.fvar()? {
         r.is_variable = true;
-        let fvar = face.fvar()?.ok_or_else(|| nil("axes"))?;
         r.axes = fvar
             .axes
             .iter()
@@ -193,8 +182,7 @@ pub fn build_report(
             .collect();
     }
     // coverage
-    if face.has_table("cmap") {
-        let cmap = face.cmap()?.ok_or_else(|| nil("unicode_mappings"))?;
+    if let Some(cmap) = face.cmap()? {
         r.total_codepoints = Some(cmap.codepoints().len());
         r.cmap_subtables = cmap.subtable_formats();
     }
@@ -303,5 +291,34 @@ mod tests {
         assert_eq!(FILE_HASHES.with(|c| c.get()), 1, "file hashed per face");
         let want = file_sha256(&bytes);
         assert!(reports.iter().all(|r| r.source_sha256 == want));
+    }
+
+    /// An sfnt whose directory lists `tags`, each with data past the end of the file.
+    fn unreadable(tags: &[&str]) -> Vec<u8> {
+        let mut b = vec![0, 1, 0, 0];
+        b.extend_from_slice(&(tags.len() as u16).to_be_bytes());
+        b.extend_from_slice(&[0; 6]);
+        for t in tags {
+            b.extend_from_slice(t.as_bytes());
+            b.extend_from_slice(&[0; 4]);
+            b.extend_from_slice(&0x7FFF_FFF0u32.to_be_bytes());
+            b.extend_from_slice(&16u32.to_be_bytes());
+        }
+        b
+    }
+
+    #[test]
+    fn an_unreadable_table_is_skipped_not_a_nomethoderror() {
+        for validate in [false, true] {
+            let bytes = unreadable(&["name", "head", "OS/2", "fvar", "cmap"]);
+            let r = audit(&bytes, "x.ttf", validate).expect("audit must not fail");
+            let r = &r[0];
+            assert_eq!(r.family_name, None);
+            assert_eq!(r.font_revision_raw, None);
+            assert_eq!(r.weight_class, None);
+            assert!(!r.is_variable);
+            assert!(r.axes.is_empty());
+            assert_eq!(r.total_codepoints, None);
+        }
     }
 }
