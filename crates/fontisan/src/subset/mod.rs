@@ -357,6 +357,88 @@ mod tests {
         assert_eq!(e.message, "undefined method 'unicode_mappings' for nil");
     }
 
+    fn simple_font(glyph: Vec<u8>, loca_end_halves: u16) -> Vec<u8> {
+        let mut hhea = vec![0; 36];
+        hhea[35] = 1;
+        font(&[
+            (b"head", head()),
+            (b"maxp", maxp()),
+            (b"hhea", hhea),
+            (b"hmtx", vec![0; 4]),
+            (b"glyf", glyph),
+            (
+                b"loca",
+                [0u16.to_be_bytes(), loca_end_halves.to_be_bytes()].concat(),
+            ),
+        ])
+    }
+
+    /// One simple glyph: 1 contour ending at point 0, no instructions, one
+    /// on-curve point with 2-byte x and y deltas.
+    fn simple_glyph(coord_bytes: usize) -> Vec<u8> {
+        let mut g = vec![0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01];
+        g.extend(vec![0; coord_bytes]);
+        g
+    }
+
+    #[test]
+    fn well_formed_simple_glyph_still_subsets() {
+        let mut g = simple_glyph(4);
+        g.push(0); // pad to the loca length (20 bytes)
+        assert_eq!(g.len(), 20);
+        subset(&simple_font(g, 10), &[0], "web").expect("valid simple glyph");
+    }
+
+    #[test]
+    fn short_simple_glyph_coordinates_are_corrupted_like_ruby() {
+        // Ruby parses every simple glyph in the closure: a y delta short of
+        // data raises CorruptedTableError, even though the bytes are copied as is.
+        let mut g = simple_glyph(2);
+        g.push(0); // 18 bytes: x is complete, y has 1 of 2 bytes
+        assert_eq!(g.len(), 18);
+        let (class, msg) = err(subset(&simple_font(g, 9), &[0], "web"));
+        assert_eq!(class, "Fontisan::CorruptedTableError");
+        assert_eq!(
+            msg,
+            "Insufficient y coordinate data for simple glyph 0 at point 0"
+        );
+    }
+
+    fn dir_entry(f: &[u8], tag: &[u8; 4]) -> usize {
+        let n = usize::from(u16::from_be_bytes([f[4], f[5]]));
+        (0..n)
+            .map(|i| 12 + 16 * i)
+            .find(|&p| &f[p..p + 4] == tag)
+            .unwrap()
+    }
+
+    #[test]
+    fn table_past_end_of_file_is_clamped_or_absent_like_ruby() {
+        // Ruby reads a table with io.seek(off); io.read(len): a long table is cut at
+        // end of file, one that starts at or past it is nil (absent). Neither fails.
+        let mut g = simple_glyph(4);
+        g.push(0);
+        let mut t = tables_of(&simple_font(g, 10)).unwrap().1;
+        t.push((*b"zzzz", vec![1; 8]));
+        let mut f = write_font(&t, 0x0001_0000);
+        let end = f.len() as u32;
+        let z = dir_entry(&f, b"zzzz");
+        f[z + 8..z + 12].copy_from_slice(&(end + 100).to_be_bytes());
+        let hm = dir_entry(&f, b"hmtx");
+        f[hm + 12..hm + 16].copy_from_slice(&u32::MAX.to_be_bytes());
+        let (_, got) = tables_of(&f).unwrap();
+        assert!(
+            !got.iter().any(|(t, _)| t == b"zzzz"),
+            "offset past EOF is absent"
+        );
+        let hmtx = got.iter().find(|(t, _)| t == b"hmtx").unwrap();
+        assert!(
+            hmtx.1.len() < 1000 && hmtx.1.len() >= 4,
+            "length is clamped to the file"
+        );
+        subset(&f, &[0], "web").expect("a short table does not fail the subset");
+    }
+
     #[test]
     fn woff2_without_trailing_pad_is_accepted() {
         // A table-dropped WOFF2 whose last block is not padded to 4 bytes:

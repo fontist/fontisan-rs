@@ -101,11 +101,22 @@ pub(crate) fn tables_of(sfnt: &[u8]) -> Result<(u32, Tables), ConvertError> {
         let tag = [e[0], e[1], e[2], e[3]];
         let off = u32::from_be_bytes([e[8], e[9], e[10], e[11]]) as usize;
         let len = u32::from_be_bytes([e[12], e[13], e[14], e[15]]) as usize;
-        let end = off.checked_add(len).ok_or_else(bad)?;
-        let data = sfnt.get(off..end).ok_or_else(bad)?.to_vec();
-        match out.iter_mut().find(|(t, _)| *t == tag) {
-            Some(slot) => slot.1 = data,
-            None => out.push((tag, data)),
+        // Ruby reads each table with `io.seek(off); io.read(len)`: a length that runs
+        // past the end of the file is clamped, and a non-empty read at or past the end
+        // gives nil, which the subsetter and converter treat as an absent table. A
+        // short or missing table never rejects the file.
+        let data = if len > 0 && off >= sfnt.len() {
+            None
+        } else {
+            Some(sfnt[off.min(sfnt.len())..off.saturating_add(len).min(sfnt.len())].to_vec())
+        };
+        match (out.iter().position(|(t, _)| *t == tag), data) {
+            (Some(i), Some(d)) => out[i].1 = d,
+            (Some(i), None) => {
+                out.remove(i);
+            }
+            (None, Some(d)) => out.push((tag, d)),
+            (None, None) => {}
         }
     }
     Ok((version, out))
