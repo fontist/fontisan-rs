@@ -65,12 +65,11 @@ pub fn instance(input: &[u8], coords: &[([u8; 4], f64)]) -> Result<Vec<u8>, Conv
     Ok(write_font(&instance_tables(&tables, coords)?, 0x0001_0000))
 }
 
-/// The tables an instance keeps when there is nothing to interpolate.
+/// A variable font with neither gvar nor CFF2 is `:static` to Ruby's
+/// `FormatDetector#variation_type`: `resolve_static_font` hands every table
+/// through, fvar/avar/HVAR/MVAR/STAT/DSIG included. (The name is historical.)
 pub(crate) fn drop_variation_tables(tables: Tables) -> Tables {
     tables
-        .into_iter()
-        .filter(|(t, _)| !DROPPED.contains(&t))
-        .collect()
 }
 
 fn get<'a>(t: &'a Tables, tag: &[u8; 4]) -> Option<&'a Vec<u8>> {
@@ -109,6 +108,15 @@ pub(crate) fn instance_tables(
     let (Some(gvar_data), Some(glyf)) = (get(tables, b"gvar"), get(tables, b"glyf")) else {
         return Err(ConvertError::new(MISSING_CLASS, NO_GVAR));
     };
+    // `check_font!` runs before the axis space is built.
+    for tag in [b"head", b"hhea", b"hmtx", b"maxp", b"loca"] {
+        if get(tables, tag).is_none() {
+            return Err(ConvertError::new(
+                "Fontisan::MissingTableError",
+                format!("Font missing required {} table", String::from_utf8_lossy(tag)),
+            ));
+        }
+    }
     let space = AxisSpace::new(fvar, get(tables, b"avar").map(Vec::as_slice))?;
     let location = space.validate(coords)?;
     let norm = space.normalize(&location);
@@ -584,5 +592,36 @@ fn format_value(v: f64) -> String {
         format!("{}", v as i64)
     } else {
         rb_float(v)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tables(tags: &[&[u8; 4]]) -> Tables {
+        tags.iter().map(|t| (**t, vec![0u8; 8])).collect()
+    }
+
+    #[test]
+    fn dropped_required_table_is_named_before_axis_parsing() {
+        // fvar is garbage: Ruby's check_font! reports the missing table first.
+        for gone in ["head", "hhea", "hmtx", "maxp", "loca"] {
+            let all = [b"fvar", b"gvar", b"glyf", b"head", b"hhea", b"hmtx", b"maxp", b"loca"];
+            let kept: Vec<&[u8; 4]> = all
+                .iter()
+                .copied()
+                .filter(|t| &t[..gone.len()] != gone.as_bytes())
+                .collect();
+            let e = instance_tables(&tables(&kept), &[(*b"wght", 500.0)]).expect_err("fails");
+            assert_eq!(e.class, "Fontisan::MissingTableError", "{gone}");
+            assert_eq!(e.message, format!("Font missing required {gone} table"));
+        }
+    }
+
+    #[test]
+    fn variable_font_without_gvar_keeps_every_table() {
+        let all = tables(&[b"fvar", b"avar", b"HVAR", b"MVAR", b"STAT", b"DSIG", b"glyf"]);
+        assert_eq!(drop_variation_tables(all.clone()), all);
     }
 }
