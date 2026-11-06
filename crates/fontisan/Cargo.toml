@@ -55,3 +55,7 @@ required-features = ["ffi"]
 [[test]]
 name = "fuzz_mutation"
 required-features = ["ffi"]
+
+[[test]]
+name = "layout_timeout"
+required-features = ["ffi"]

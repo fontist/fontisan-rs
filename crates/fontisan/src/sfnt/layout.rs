@@ -61,17 +61,71 @@ fn tag_list(data: &[u8]) -> Result<Vec<(Tag, u16)>, Error> {
     read_records(&mut c, count)
 }
 
-/// `LangSys`: reserved u16, required index u16, count u16, `count` x u16.
-fn lang_sys(data: &[u8]) -> Result<Vec<u16>, Error> {
-    let mut c = Cursor::new(data, 0);
-    c.u16()?;
-    c.u16()?;
-    let count = c.u16()?;
-    let mut v = Vec::with_capacity(usize::from(count).min(c.rest().len() / 2));
-    for _ in 0..count {
-        v.push(c.u16()?);
+/// Collects the distinct feature indices of many `LangSys` tables in first-seen
+/// order without re-reading shared bytes.
+///
+/// A `LangSys` index array is a run of u16 words at a fixed byte parity inside
+/// the script table, so overlapping arrays (a hostile font can point tens of
+/// thousands of records at overlapping 64K-entry arrays) read the same words
+/// again and again. Each word is read once: `skip` is a "next unread
+/// slot" union-find per parity (slot = byte position / 2). A skipped word was
+/// already collected earlier, so the result and its first-seen order are
+/// exactly those of reading every array in full.
+struct IndexCollector {
+    /// `skip[parity][slot]`: 0 while the slot is unread, else the next slot to try.
+    skip: [Vec<u32>; 2],
+    seen: Vec<bool>,
+    out: Vec<u16>,
+}
+
+impl IndexCollector {
+    fn new(len: usize) -> Self {
+        let slots = len / 2 + 2;
+        Self {
+            skip: [vec![0; slots], vec![0; slots]],
+            seen: vec![false; 1 << 16],
+            out: Vec::new(),
+        }
     }
-    Ok(v)
+
+    fn find(&mut self, parity: usize, slot: usize) -> usize {
+        let skip = &mut self.skip[parity];
+        let mut root = slot;
+        while skip[root] != 0 {
+            root = skip[root] as usize;
+        }
+        let mut cur = slot;
+        while cur != root {
+            let next = skip[cur] as usize;
+            skip[cur] = root as u32;
+            cur = next;
+        }
+        root
+    }
+
+    /// `LangSys`: reserved u16, required index u16, count u16, `count` x u16,
+    /// read at `data[offset..]`; `Err` on a short read, as `Cursor` would.
+    fn add(&mut self, data: &[u8], offset: usize) -> Result<(), Error> {
+        let mut c = Cursor::new(&data[offset..], 0);
+        c.u16()?;
+        c.u16()?;
+        let count = usize::from(c.u16()?);
+        c.bytes(count * 2)?;
+        let first = offset + 6;
+        let parity = first & 1;
+        let (lo, hi) = (first >> 1, (first + 2 * count) >> 1);
+        let mut slot = self.find(parity, lo);
+        while slot < hi {
+            let pos = slot * 2 + parity;
+            let index = u16::from_be_bytes([data[pos], data[pos + 1]]);
+            if !std::mem::replace(&mut self.seen[usize::from(index)], true) {
+                self.out.push(index);
+            }
+            self.skip[parity][slot] = (slot + 1) as u32;
+            slot = self.find(parity, slot + 1);
+        }
+        Ok(())
+    }
 }
 
 impl LayoutTable {
@@ -130,20 +184,18 @@ impl LayoutTable {
         let default_offset = c.u16()?;
         let count = c.u16()?;
         let langs = read_records(&mut c, count)?;
-        let mut indices = Vec::new();
+        let mut indices = IndexCollector::new(data.len());
         if default_offset != 0 {
             if let Some(d) = non_empty(data, i64::from(default_offset)) {
-                indices.extend(lang_sys(d)?);
+                indices.add(data, data.len() - d.len())?;
             }
         }
         for (_, off) in langs {
             if let Some(d) = non_empty(data, i64::from(off)) {
-                indices.extend(lang_sys(d)?);
+                indices.add(data, data.len() - d.len())?;
             }
         }
-        let mut seen = std::collections::HashSet::new();
-        indices.retain(|i| seen.insert(*i));
-        Ok(indices)
+        Ok(indices.out)
     }
 
     /// Feature tags enabled for `script` (unique, in index order); `[]` on any failure.
@@ -165,9 +217,10 @@ impl LayoutTable {
             return vec![];
         };
         let mut out: Vec<Tag> = Vec::new();
+        let mut seen = std::collections::HashSet::new();
         for idx in indices {
             if let Some((tag, _)) = features.get(usize::from(idx)) {
-                if !out.contains(tag) {
+                if seen.insert(*tag) {
                     out.push(*tag);
                 }
             }
