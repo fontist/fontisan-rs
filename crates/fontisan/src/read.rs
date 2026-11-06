@@ -4,8 +4,8 @@
 //! error Ruby's `read` would raise ([`error_json`] renders it).
 use crate::json::{Json, obj};
 use crate::sfnt::{
-    AxisValue, DigestFailure, Error, ErrorClass, Font, HvarDigest, IvsDigest, LayoutTable,
-    MapDigest, Options, Tag, Value, face_count,
+    AxisValue, DigestFailure, Error, ErrorClass, Font, GlyphDigests, HvarDigest, IvsDigest,
+    LayoutTable, MapDigest, Options, Tag, Value, face_count,
 };
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -26,6 +26,34 @@ fn file_digest(bytes: &[u8]) -> String {
     #[cfg(test)]
     FILE_HASHES.with(|c| c.set(c.get() + 1));
     sha_hex(bytes)
+}
+
+/// SHA-256 of table data, memoised by the table's location in the file. Faces of a
+/// collection share tables (same offset and length), so each shared table is hashed
+/// once per read rather than once per face.
+#[derive(Default)]
+struct TableDigests(
+    std::collections::HashMap<(usize, usize), String>,
+    GlyphDigests,
+);
+
+impl TableDigests {
+    fn hex(&mut self, data: &[u8]) -> String {
+        // `data` always borrows from the one input buffer, so address+length is its location.
+        self.0
+            .entry((data.as_ptr() as usize, data.len()))
+            .or_insert_with(|| {
+                #[cfg(test)]
+                TABLE_BYTES.with(|c| c.set(c.get() + data.len()));
+                sha_hex(data)
+            })
+            .clone()
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    static TABLE_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -191,17 +219,30 @@ fn fvar(f: &Font) -> Json {
 
 /// One face of `bytes` as the facade's read entry, or the first error `read` raises.
 pub fn read_face(bytes: &[u8], font: &Font, index: usize) -> Result<Json, Error> {
-    read_face_hashed(&file_digest(bytes), font, index)
+    read_face_hashed(
+        &file_digest(bytes),
+        &mut TableDigests::default(),
+        font,
+        index,
+    )
 }
 
 /// [`read_face`] with the whole-file digest supplied, so a collection hashes the
 /// file once rather than once per face.
-fn read_face_hashed(file_sha256: &str, font: &Font, index: usize) -> Result<Json, Error> {
+fn read_face_hashed(
+    file_sha256: &str,
+    digests: &mut TableDigests,
+    font: &Font,
+    index: usize,
+) -> Result<Json, Error> {
     let tables: Vec<Json> = font
         .table_summaries()
         .into_iter()
         .map(|t| {
-            let sha = t.length.and_then(|_| font.table_data(&t.tag)).map(sha_hex);
+            let sha = t
+                .length
+                .and_then(|_| font.table_data(&t.tag))
+                .map(|d| digests.hex(d));
             obj! {"tag" => t.tag, "length" => t.length, "sha256" => sha,
             "error" => t.error.map(|c| c.ruby_name())}
         })
@@ -247,7 +288,7 @@ fn read_face_hashed(file_sha256: &str, font: &Font, index: usize) -> Result<Json
             "min_mem_type1" => p.min_mem_type1, "max_mem_type1" => p.max_mem_type1}
         }
     };
-    let o = font.outline_summary();
+    let o = font.outline_summary_with(&mut digests.1);
     let mut outlines = vec![
         ("kind", Json::from(o.kind.map(|k| k.as_str()))),
         ("count", o.count.into()),
@@ -279,10 +320,11 @@ fn read_face_hashed(file_sha256: &str, font: &Font, index: usize) -> Result<Json
 pub fn read(bytes: &[u8], options: Options) -> Result<Vec<Json>, Error> {
     let faces = face_count(bytes).unwrap_or(1);
     let file_sha256 = file_digest(bytes);
+    let mut digests = TableDigests::default();
     (0..faces)
         .map(|i| {
             let font = Font::load(bytes, i, options)?;
-            read_face_hashed(&file_sha256, &font, i)
+            read_face_hashed(&file_sha256, &mut digests, &font, i)
         })
         .collect()
 }
@@ -319,6 +361,48 @@ mod tests {
             };
             let got = m.iter().find(|(k, _)| *k == "file_sha256").map(|(_, v)| v);
             assert!(matches!(got, Some(Json::Str(s)) if *s == want), "{got:?}");
+        }
+    }
+
+    /// `faces` faces whose directories all point one `DATA` table at the same bytes.
+    fn shared_table_collection(faces: u32, data: &[u8]) -> Vec<u8> {
+        let header = 12 + 4 * faces as usize;
+        let face_len = 12 + 16;
+        let data_at = header + face_len * faces as usize;
+        let mut b = b"ttcf\0\x01\0\0".to_vec();
+        b.extend_from_slice(&faces.to_be_bytes());
+        for i in 0..faces as usize {
+            b.extend_from_slice(&((header + face_len * i) as u32).to_be_bytes());
+        }
+        for _ in 0..faces {
+            b.extend_from_slice(&[0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]);
+            b.extend_from_slice(b"DATA\0\0\0\0");
+            b.extend_from_slice(&(data_at as u32).to_be_bytes());
+            b.extend_from_slice(&(data.len() as u32).to_be_bytes());
+        }
+        b.extend_from_slice(data);
+        b
+    }
+
+    #[test]
+    fn a_table_shared_by_faces_is_hashed_once_with_the_same_digest() {
+        let data: Vec<u8> = (0..200u8).collect();
+        let bytes = shared_table_collection(4, &data);
+        TABLE_BYTES.with(|c| c.set(0));
+        let faces = read(&bytes, Options::default()).expect("read");
+        assert_eq!(faces.len(), 4);
+        assert_eq!(
+            TABLE_BYTES.with(|c| c.get()),
+            data.len(),
+            "shared table hashed per face"
+        );
+        let want = sha_hex(&data);
+        for face in &faces {
+            let rendered = format!("{face:?}");
+            assert!(
+                rendered.contains(&want),
+                "face lacks the table digest {want}: {rendered}"
+            );
         }
     }
 }

@@ -55,11 +55,35 @@ impl Outlines<'_> {
 
     /// SHA-256 over the concatenated 32-byte per-glyph hashes.
     pub fn digest(&self) -> [u8; 32] {
+        self.digest_with(&mut GlyphDigests::default())
+    }
+
+    /// [`Self::digest`] through `cache`, so glyph data shared between faces of a
+    /// collection (same location in the file) is hashed once.
+    pub fn digest_with(&self, cache: &mut GlyphDigests) -> [u8; 32] {
         let mut h = Sha256::new();
         for g in &self.glyphs {
-            h.update(Sha256::digest(g));
+            h.update(cache.hash(g));
         }
         h.finalize().into()
+    }
+}
+
+/// Per-glyph SHA-256 memoised by the glyph's location in the input buffer.
+#[derive(Default)]
+pub struct GlyphDigests(std::collections::HashMap<(usize, usize), [u8; 32]>);
+
+impl GlyphDigests {
+    fn hash(&mut self, glyph: &[u8]) -> [u8; 32] {
+        // Every glyph slice borrows from the one input buffer, so address+length
+        // identifies its bytes. Empty glyphs all hash the empty string.
+        if glyph.is_empty() {
+            return Sha256::digest(glyph).into();
+        }
+        *self
+            .0
+            .entry((glyph.as_ptr() as usize, glyph.len()))
+            .or_insert_with(|| Sha256::digest(glyph).into())
     }
 }
 
@@ -119,11 +143,16 @@ impl Font<'_> {
 
     /// `outline_summary`: never fails, a read error becomes `error`.
     pub fn outline_summary(&self) -> OutlineSummary {
+        self.outline_summary_with(&mut GlyphDigests::default())
+    }
+
+    /// [`Self::outline_summary`] sharing glyph digests across faces of one read.
+    pub fn outline_summary_with(&self, cache: &mut GlyphDigests) -> OutlineSummary {
         match self.outlines() {
             Ok(Some(o)) => OutlineSummary {
                 kind: Some(o.kind),
                 count: o.count(),
-                digest: Some(hex(&o.digest())),
+                digest: Some(hex(&o.digest_with(cache))),
                 error: None,
             },
             Ok(None) => OutlineSummary {
@@ -161,5 +190,29 @@ impl Font<'_> {
             }
             Err(e) => Err(e),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shared_glyphs_hash_once_and_the_digest_is_unchanged() {
+        let buf: Vec<u8> = (0..64u8).collect();
+        let glyphs = |idx: &[(usize, usize)]| Outlines {
+            kind: OutlineKind::Cff,
+            glyphs: idx.iter().map(|&(a, b)| &buf[a..b]).collect(),
+        };
+        // Two "faces" sharing glyph locations 0..10 and 10..30, one distinct each.
+        let a = glyphs(&[(0, 10), (10, 30), (30, 40), (5, 5)]);
+        let b = glyphs(&[(0, 10), (10, 30), (40, 64), (5, 5)]);
+        let mut cache = GlyphDigests::default();
+        let (da, db) = (a.digest_with(&mut cache), b.digest_with(&mut cache));
+        assert_eq!(da, a.digest());
+        assert_eq!(db, b.digest());
+        assert_ne!(da, db);
+        // 5 distinct non-empty locations; the empty glyph is never cached.
+        assert_eq!(cache.0.len(), 4);
     }
 }

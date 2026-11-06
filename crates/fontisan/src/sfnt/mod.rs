@@ -20,7 +20,7 @@ pub use font::{
     face_count,
 };
 pub use layout::{LayoutTable, Tag};
-pub use outlines::{OutlineKind, OutlineSummary, Outlines};
+pub use outlines::{GlyphDigests, OutlineKind, OutlineSummary, Outlines};
 pub use tables::{Head, Hhea, Maxp, Name, NameRecord, Os2, Post, Snapshot, Value};
 pub use variations::{
     Avar, AxisValue, DigestFailure, Fvar, FvarAxis, FvarInstance, GvarDigest, HvarDigest,
