@@ -142,14 +142,109 @@ fn validate_output_tables(
     tables: &Tables,
     checks: &[(&[u8; 4], &str)],
 ) -> Result<(), ConvertError> {
-    for (tag, msg) in checks {
-        if !has(tables, tag) {
-            return Err(ConvertError::transform(format!(
-                "Output validation failed: {msg}"
-            )));
-        }
+    let owned = checks.iter().map(|(t, m)| (*t, m.to_string())).collect();
+    validate_checks(tables, owned)
+}
+
+fn validate_checks(tables: &Tables, checks: Vec<(&[u8; 4], String)>) -> Result<(), ConvertError> {
+    // Ruby reports every failing check, in profile order: name content, the
+    // missing tables, then cmap content.
+    let mut pieces: Vec<String> = name_content_failures(tables);
+    if let Some((_, msg)) = checks.into_iter().find(|(tag, _)| !has(tables, tag)) {
+        pieces.push(msg);
     }
-    Ok(())
+    if cmap_is_empty(tables) {
+        pieces.extend(vec!["Table 'cmap' failed validation".to_string(); 3]);
+    }
+    if pieces.is_empty() {
+        return Ok(());
+    }
+    Err(ConvertError::transform(format!(
+        "Output validation failed: {}",
+        pieces.join(", ")
+    )))
+}
+
+fn table<'a>(tables: &'a Tables, tag: &[u8; 4]) -> Option<&'a [u8]> {
+    tables
+        .iter()
+        .find(|(t, _)| t == tag)
+        .map(|(_, d)| d.as_slice())
+}
+
+/// An existing `cmap` that is empty or has no subtables fails Ruby's three cmap checks.
+fn cmap_is_empty(tables: &Tables) -> bool {
+    table(tables, b"cmap").is_some_and(|c| c.get(2..4).is_none_or(|n| n == [0, 0]))
+}
+
+/// Ruby's production-profile name checks on an existing `name` table: a
+/// Windows Unicode English record (3,1,0x409), a family name (ID 1) and a
+/// PostScript name (ID 6); one "failed validation" clause per failed check.
+fn name_content_failures(tables: &Tables) -> Vec<String> {
+    let Some(n) = table(tables, b"name") else {
+        return Vec::new();
+    };
+    let be = |o: usize| n.get(o..o + 2).map(|b| u16::from_be_bytes([b[0], b[1]]));
+    let count = be(2).unwrap_or(0) as usize;
+    let recs: Vec<[u16; 4]> = (0..count)
+        .filter_map(|i| {
+            let o = 6 + 12 * i;
+            Some([be(o)?, be(o + 2)?, be(o + 4)?, be(o + 6)?])
+        })
+        .collect();
+    let windows_english = recs.iter().any(|r| r[..3] == [3, 1, 0x409]);
+    let family = recs.iter().any(|r| r[3] == 1);
+    let ps = recs.iter().any(|r| r[3] == 6);
+    [windows_english, family, ps]
+        .into_iter()
+        .filter(|ok| !ok)
+        .map(|_| "Table 'name' failed validation".to_string())
+        .collect()
+}
+
+const HEAD_MSG_PREFIX: &str = "Font structure validation failed for check 'required_tables'";
+const LOCA_MSG: &str = "Exception during check execution: NoMethodError - undefined method 'parsed?' for nil, Exception during check execution: NoMethodError - undefined method 'parsed?' for nil, Exception during check execution: NoMethodError - undefined method 'parsed?' for nil";
+
+/// Ruby's output validation for a source that is not transformed but still
+/// rebuilt (a WOFF source, an `OTTO` file holding `glyf`, an outline-less
+/// TrueType going to otf): the required-table checks with the clauses Ruby
+/// measured for the table that is missing. `glyf` selects the TrueType-only ones.
+fn validate_rebuilt_output(tables: &Tables, glyf: bool) -> Result<(), ConvertError> {
+    let num_glyphs =
+        "Exception during check execution: NoMethodError - undefined method 'num_glyphs' for nil";
+    let loc_fmt = "Exception during check execution: NoMethodError - undefined method 'index_to_loc_format' for nil";
+    let rep = |s: &str, n: usize| vec![s.to_string(); n].join(", ");
+    let req = |t: &str, n: usize| rep(&format!("Required table '{t}' is missing"), n);
+    let structure = |inner: String| format!("{HEAD_MSG_PREFIX}, {inner}");
+    let mut checks: Vec<(&[u8; 4], String)> = vec![
+        (
+            b"head",
+            if glyf {
+                structure(format!("{}, {}", req("head", 3), rep(loc_fmt, 3)))
+            } else {
+                structure(req("head", 3))
+            },
+        ),
+        (b"hhea", structure(req("hhea", 2))),
+        (
+            b"maxp",
+            structure(format!(
+                "{}, {}",
+                req("maxp", 2),
+                rep(num_glyphs, if glyf { 4 } else { 1 })
+            )),
+        ),
+    ];
+    if glyf {
+        checks.push((b"loca", LOCA_MSG.to_string()));
+    }
+    checks.extend([
+        (b"post", POST_MSG.to_string()),
+        (b"name", NAME_MSG.to_string()),
+        (b"OS/2", OS2_MSG.to_string()),
+        (b"cmap", CMAP_MSG.to_string()),
+    ]);
+    validate_checks(tables, checks)
 }
 
 /// A CFF -> TrueType result (Ruby's `Output validation failed`).
@@ -211,7 +306,11 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
 
     // 1i-instance: a variable font goes through instancing at its default
     // location first, whatever the target (Ruby's `:instance` strategy).
-    let tables = if is_variable {
+    let tables = if is_variable && !has(&tables, b"gvar") && !has(&tables, b"CFF2") {
+        // No variation outlines to apply (gvar or CFF2 dropped): Ruby converts
+        // the default outlines and drops the variation tables.
+        crate::instance::drop_variation_tables(tables)
+    } else if is_variable {
         if has(&tables, b"CFF2") {
             return Err(ConvertError::transform(
                 "Static instancing needs TrueType outlines with gvar (CFF2 variable fonts are not supported yet)",
@@ -227,6 +326,16 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
         Target::Woff => Ok(woff1::encode(&tables)),
         Target::Ttf | Target::Otf => {
             let want_glyf = target == Target::Ttf;
+            if want_glyf
+                && !has(&tables, b"glyf")
+                && !has(&tables, b"CFF ")
+                && !has(&tables, b"CFF2")
+            {
+                // Ruby's `FormatConverter#detect_format` on an outline-less source.
+                return Err(ConvertError::transform(
+                    "Cannot detect font format: missing both CFF and glyf tables",
+                ));
+            }
             if has(&tables, b"glyf") && !want_glyf {
                 // 1h-t2o: glyf -> CFF outline conversion.
                 if !has(&tables, b"loca") {
@@ -262,6 +371,13 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
                 return Err(ConvertError::unsupported(
                     "CFF to TrueType outline conversion is card 1h-o2t",
                 ));
+            }
+            // Ruby validates the written font unless the detected source format
+            // is already the target (a plain sfnt of the matching flavour).
+            let plain = matches!(format, Some(Format::Ttf | Format::Otf))
+                && (sfnt_version == 0x4F54_544F) != want_glyf;
+            if !plain {
+                validate_rebuilt_output(&tables, want_glyf)?;
             }
             let version = if want_glyf { 0x0001_0000 } else { 0x4F54_544F };
             Ok(write_font(&tables, version))

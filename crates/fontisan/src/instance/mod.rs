@@ -65,6 +65,14 @@ pub fn instance(input: &[u8], coords: &[([u8; 4], f64)]) -> Result<Vec<u8>, Conv
     Ok(write_font(&instance_tables(&tables, coords)?, 0x0001_0000))
 }
 
+/// The tables an instance keeps when there is nothing to interpolate.
+pub(crate) fn drop_variation_tables(tables: Tables) -> Tables {
+    tables
+        .into_iter()
+        .filter(|(t, _)| !DROPPED.contains(&t))
+        .collect()
+}
+
 fn get<'a>(t: &'a Tables, tag: &[u8; 4]) -> Option<&'a Vec<u8>> {
     t.iter().find(|(k, _)| k == tag).map(|(_, v)| v)
 }

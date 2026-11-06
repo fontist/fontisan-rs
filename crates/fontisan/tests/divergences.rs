@@ -63,16 +63,22 @@ fn drop_cmap(bytes: &[u8]) -> Vec<u8> {
 /// A copy of `bytes` (a single-face sfnt) without table `tag`. Tables keep
 /// their order and are 4-byte aligned, so the result is deterministic.
 fn drop_table(bytes: &[u8], tag: &[u8; 4]) -> Vec<u8> {
+    drop_table_at(bytes, 0, tag)
+}
+
+/// `drop_table` for the sfnt whose directory starts at `head` (a collection
+/// member); table offsets are absolute in `bytes`, the result is standalone.
+fn drop_table_at(bytes: &[u8], head: usize, tag: &[u8; 4]) -> Vec<u8> {
     let u32_at = |o: usize| u32::from_be_bytes(bytes[o..o + 4].try_into().unwrap()) as usize;
-    let n = usize::from(u16::from_be_bytes([bytes[4], bytes[5]]));
+    let n = usize::from(u16::from_be_bytes([bytes[head + 4], bytes[head + 5]]));
     let kept: Vec<usize> = (0..n)
-        .map(|i| 12 + 16 * i)
+        .map(|i| head + 12 + 16 * i)
         .filter(|&r| &bytes[r..r + 4] != tag)
         .collect();
     let m = kept.len();
     let es = m.ilog2() as usize;
     let sr = 16 * (1usize << es);
-    let mut out = bytes[..4].to_vec();
+    let mut out = bytes[head..head + 4].to_vec();
     for v in [m, sr, es, m * 16 - sr] {
         out.extend_from_slice(&(v as u16).to_be_bytes());
     }
@@ -84,6 +90,43 @@ fn drop_table(bytes: &[u8], tag: &[u8; 4]) -> Vec<u8> {
         out.extend_from_slice(&((12 + 16 * m + body.len()) as u32).to_be_bytes());
         out.extend_from_slice(&bytes[r + 12..r + 16]);
         body.extend_from_slice(&bytes[u32_at(r + 8)..u32_at(r + 8) + u32_at(r + 12)]);
+    }
+    out.extend(body);
+    out
+}
+
+/// A collection with `tag` removed from every member, like the sweep's TTC drops.
+fn drop_table_from_collection(bytes: &[u8], tag: &[u8; 4]) -> Vec<u8> {
+    let count = u32::from_be_bytes(bytes[8..12].try_into().unwrap()) as usize;
+    let members: Vec<Vec<u8>> = (0..count)
+        .map(|i| {
+            let off = u32::from_be_bytes(bytes[12 + 4 * i..16 + 4 * i].try_into().unwrap());
+            drop_table_at(bytes, off as usize, tag)
+        })
+        .collect();
+    collection_of(&members)
+}
+
+/// A TTC whose members are the given standalone sfnts.
+fn collection_of(members: &[Vec<u8>]) -> Vec<u8> {
+    let count = members.len();
+    let mut out = b"ttcf".to_vec();
+    out.extend_from_slice(&0x0001_0000u32.to_be_bytes());
+    out.extend_from_slice(&(count as u32).to_be_bytes());
+    let mut base = 12 + 4 * count;
+    let mut body = Vec::new();
+    for m in members {
+        out.extend_from_slice(&(base as u32).to_be_bytes());
+        let n = usize::from(u16::from_be_bytes([m[4], m[5]]));
+        let mut m = m.clone();
+        for t in 0..n {
+            let o = 12 + 16 * t + 8;
+            let v = u32::from_be_bytes(m[o..o + 4].try_into().unwrap()) + base as u32;
+            m[o..o + 4].copy_from_slice(&v.to_be_bytes());
+        }
+        m.resize(m.len().next_multiple_of(4), 0);
+        base += m.len();
+        body.extend(m);
     }
     out.extend(body);
     out
@@ -286,5 +329,166 @@ fn ttf_to_otf_without_loca_name_post_os2_or_cmap_fails_like_ruby() {
             format!("Conversion failed: Transformation failed: {msg}"),
             "{name}"
         );
+    }
+}
+
+/// The corpus file behind a sweep case name (`scripts/corpus/drop_table_sweep.rb`).
+fn sweep_source(corpus: &std::path::Path, font: &str) -> Vec<u8> {
+    let (dir, file) = match font {
+        "noto-sans-jp-subset-regular-otf" => ("fonts", "NotoSansJP-Regular.otf"),
+        "fonttools-test-woff" => ("fonts", "TestWOFF.woff"),
+        "fonttools-test-otf" => ("fonts", "TestOTF.otf"),
+        "fonttools-test-ttc" => ("fonts", "TestTTC.ttc"),
+        "fonttools-test-ttc-v2" => ("fonts", "TestTTCv2.ttc"),
+        "source-sans-3-regular-otf-woff" => ("fonts", "SourceSans3-Regular.otf.woff"),
+        "source-sans-3-regular-ttf-woff" => ("fonts", "SourceSans3-Regular.ttf.woff"),
+        "source-sans-3-regular-otf" => ("fonts", "SourceSans3-Regular.otf"),
+        "source-sans-3-vf-upright-ttf" => ("fonts", "SourceSans3VF-Upright.ttf"),
+        "source-sans-3-vf-italic-ttf" => ("fonts", "SourceSans3VF-Italic.ttf"),
+        "source-sans-3-vf-upright-cff2" => ("fonts", "SourceSans3VF-Upright.otf"),
+        "noto-sans-vf-wdth-wght" => ("fonts", "NotoSans[wdth,wght].ttf"),
+        "mona-sans-vf-all-axes" => ("fonts", "MonaSansVF[wdth,wght,opsz,ital].ttf"),
+        other => {
+            let ext = if other.starts_with("ttc-") {
+                "ttc"
+            } else {
+                "ttf"
+            };
+            return std::fs::read(corpus.join("derived").join(format!("{other}.{ext}")))
+                .unwrap_or_else(|e| panic!("{font}: {e}"));
+        }
+    };
+    std::fs::read(corpus.join(dir).join(file)).unwrap_or_else(|e| panic!("{font}: {e}"))
+}
+
+/// Ruby's `Fontisan.convert` outcome for sources with one table dropped, as the
+/// drop-table sweep measured it (`convert_missing_tables.json`; key
+/// `<target>|<font>|<tag>`, value `{"ok":true}` or `{"error":"<message>"}`).
+/// Covers: required tables on WOFF 1 and OTTO-on-glyf sources, outline-less
+/// sources, a collection whose members lost their outlines, and variable fonts
+/// that lost gvar or CFF2.
+#[test]
+fn convert_of_fonts_missing_a_table_matches_ruby() {
+    use fontisan::convert::{Target, convert};
+    let Some(corpus) = corpus() else { return };
+    let fx: serde_json::Value =
+        serde_json::from_str(include_str!("divergences/convert_missing_tables.json")).unwrap();
+    for (key, want) in fx.as_object().unwrap() {
+        let parts: Vec<&str> = key.split('|').collect();
+        let (to, font, tag) = (parts[0], parts[1], parts[2]);
+        let tag4: [u8; 4] = tag.as_bytes().try_into().unwrap();
+        let src = sweep_source(&corpus, font);
+        let input = if src.starts_with(b"ttcf") {
+            drop_table_from_collection(&src, &tag4)
+        } else if src.starts_with(b"wOFF") {
+            let sfnt = fontisan::woff::decode_woff(&src).unwrap();
+            convert(&drop_table(&sfnt, &tag4), Target::Woff, 0).unwrap()
+        } else {
+            drop_table(&src, &tag4)
+        };
+        let target = match to {
+            "ttf" => Target::Ttf,
+            "otf" => Target::Otf,
+            "woff" => Target::Woff,
+            "woff2" => Target::Woff2,
+            "otc" => Target::Otc,
+            other => panic!("{other}"),
+        };
+        let got = convert(&input, target, 0);
+        match (want.get("error"), got) {
+            (Some(msg), Err(e)) => assert_eq!(e.message, msg.as_str().unwrap(), "{key}"),
+            (Some(msg), Ok(_)) => panic!("{key}: ruby fails with {msg}, native wrote a font"),
+            (None, Ok(_)) => {}
+            (None, Err(e)) => panic!("{key}: ruby converts, native fails: {}", e.message),
+        }
+    }
+}
+
+/// `(glyf offsets, indexToLocFormat)` of the sfnt whose directory starts at `head`.
+fn loca_offsets(b: &[u8], head: usize) -> (Vec<usize>, u16) {
+    let u32_at = |o: usize| u32::from_be_bytes(b[o..o + 4].try_into().unwrap()) as usize;
+    let n = usize::from(u16::from_be_bytes([b[head + 4], b[head + 5]]));
+    let rec = |tag: &[u8; 4]| {
+        (0..n)
+            .map(|i| head + 12 + 16 * i)
+            .find(|&r| &b[r..r + 4] == tag)
+            .map(|r| (u32_at(r + 8), u32_at(r + 12)))
+            .unwrap()
+    };
+    let (ho, _) = rec(b"head");
+    let fmt = u16::from_be_bytes([b[ho + 50], b[ho + 51]]);
+    let (mo, _) = rec(b"maxp");
+    let ng = usize::from(u16::from_be_bytes([b[mo + 4], b[mo + 5]]));
+    let (lo, _) = rec(b"loca");
+    let offs = (0..=ng)
+        .map(|i| {
+            if fmt == 0 {
+                2 * usize::from(u16::from_be_bytes([b[lo + 2 * i], b[lo + 2 * i + 1]]))
+            } else {
+                u32_at(lo + 4 * i)
+            }
+        })
+        .collect();
+    (offs, fmt)
+}
+
+/// Ruby 9716f23 (single font) and 7ac79b4 (collection): a short-loca glyf whose
+/// 4-byte padded size passes 0x1FFFE is written with a long loca. Measured with
+/// source-sans-3-vf-upright-ttf minus fvar and gvar: Ruby converts it to woff2,
+/// and as both members of a TTC. The pinned `woff2_decompress`
+/// (`FONTISAN_WOFF2_DECOMPRESS`) must read back a monotonic long loca.
+#[test]
+#[allow(clippy::disallowed_types, clippy::disallowed_methods)]
+fn woff2_widens_short_loca_when_padded_glyf_overflows() {
+    use fontisan::convert::{Target, convert};
+    let Some(corpus) = corpus() else { return };
+    let src = std::fs::read(corpus.join("fonts/SourceSans3VF-Upright.ttf")).unwrap();
+    let base = drop_table(&drop_table(&src, b"fvar"), b"gvar");
+    let single = convert(&base, Target::Woff2, 0).expect("single font converts");
+    let ttc = collection_of(&[base.clone(), base]);
+    let coll = convert(&ttc, Target::Woff2, 0).expect("collection converts");
+    let Some(bin) = std::env::var_os("FONTISAN_WOFF2_DECOMPRESS")
+        .map(std::path::PathBuf::from)
+        .filter(|p| p.is_file())
+    else {
+        eprintln!("SKIPPED decode check: FONTISAN_WOFF2_DECOMPRESS unset");
+        return;
+    };
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("woff2-loca");
+    std::fs::create_dir_all(&dir).unwrap();
+    for (name, woff2) in [("single", single), ("collection", coll)] {
+        let f = dir.join(format!("{name}.woff2"));
+        std::fs::write(&f, &woff2).unwrap();
+        assert!(
+            std::process::Command::new(&bin)
+                .arg(&f)
+                .status()
+                .unwrap()
+                .success()
+        );
+        let out = std::fs::read(f.with_extension("ttf")).unwrap();
+        let heads: Vec<usize> = if out.starts_with(b"ttcf") {
+            let n = u32::from_be_bytes(out[8..12].try_into().unwrap()) as usize;
+            (0..n)
+                .map(|i| {
+                    u32::from_be_bytes(out[12 + 4 * i..16 + 4 * i].try_into().unwrap()) as usize
+                })
+                .collect()
+        } else {
+            vec![0]
+        };
+        assert_eq!(heads.len(), if name == "single" { 1 } else { 2 });
+        for h in heads {
+            let (offs, fmt) = loca_offsets(&out, h);
+            assert_eq!(fmt, 1, "{name}: indexToLocFormat");
+            assert!(
+                offs.windows(2).all(|w| w[0] <= w[1]),
+                "{name}: loca not monotonic"
+            );
+            assert!(
+                *offs.last().unwrap() > 0x1FFFE,
+                "{name}: glyf is below the short-loca limit"
+            );
+        }
     }
 }

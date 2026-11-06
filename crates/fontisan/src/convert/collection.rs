@@ -280,7 +280,17 @@ fn prepare(m: &Member, timestamp: i64) -> Result<Prepared, ConvertError> {
         get(&tables, b"head"),
     ) {
         let num_glyphs = usize::from(w2::u16_at(&maxp, 4).map_err(werr)?);
-        let long = w2::u16_at(&head, 50).map_err(werr)? != 0;
+        let mut long = w2::u16_at(&head, 50).map_err(werr)? != 0;
+        let (mut glyf, mut loca) = (glyf, loca);
+        if !long && w2::short_loca_overflows(glyf.len(), num_glyphs) {
+            (glyf, loca) = w2::canonical_long_loca(&glyf, &loca, num_glyphs).map_err(werr)?;
+            long = true;
+            for (t, d) in tables.iter_mut() {
+                if t == b"head" {
+                    d[50..52].copy_from_slice(&1u16.to_be_bytes());
+                }
+            }
+        }
         let transformed = w2::transform_glyf(&glyf, &loca, num_glyphs, long).map_err(werr)?;
         loca_orig_length = Some(loca.len());
         for (t, d) in tables.iter_mut() {
@@ -445,6 +455,12 @@ pub(crate) enum Source {
     Woff2Collection,
 }
 
+fn has_outlines(tables: &Tables) -> bool {
+    tables
+        .iter()
+        .any(|(t, _)| t == b"glyf" || t == b"CFF " || t == b"CFF2")
+}
+
 /// `CollectionConverter#convert` for `target` in {ttc, otc, woff2}.
 pub(crate) fn convert(
     input: &[u8],
@@ -459,6 +475,14 @@ pub(crate) fn convert(
                 Source::Ttc => ttc_members(input)?,
                 Source::Woff2Collection => woff2_members(input)?,
             };
+            // Ruby's `detect_font_format` runs on every unpacked member: an
+            // outline-less member (no glyf, CFF or CFF2) aborts the conversion.
+            if members.iter().any(|m| !has_outlines(&m.tables)) {
+                return Err(ConvertError::new(
+                    super::ERROR_CLASS,
+                    "Conversion failed: Cannot detect font format",
+                ));
+            }
             if target == Target::Woff2 {
                 encode_woff2_collection(&members, timestamp)
             } else {

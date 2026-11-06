@@ -1,0 +1,188 @@
+{
+ "otc|fonttools-test-ttc-v2|glyf": {
+  "error": "Conversion failed: Cannot detect font format"
+ },
+ "otc|fonttools-test-ttc|glyf": {
+  "error": "Conversion failed: Cannot detect font format"
+ },
+ "otc|ttc-4members-shared|CFF ": {
+  "error": "Conversion failed: Cannot detect font format"
+ },
+ "otc|ttc-4members-shared|glyf": {
+  "error": "Conversion failed: Cannot detect font format"
+ },
+ "otf|fonttools-test-woff|OS/2": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing"
+ },
+ "otf|fonttools-test-woff|cmap": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing, Exception during check execution: NoMethodError - undefined method 'valid_glyph_indices?' for nil"
+ },
+ "otf|fonttools-test-woff|head": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Font structure validation failed for check 'required_tables', Required table 'head' is missing, Required table 'head' is missing, Required table 'head' is missing"
+ },
+ "otf|fonttools-test-woff|hhea": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Font structure validation failed for check 'required_tables', Required table 'hhea' is missing, Required table 'hhea' is missing"
+ },
+ "otf|fonttools-test-woff|maxp": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Font structure validation failed for check 'required_tables', Required table 'maxp' is missing, Required table 'maxp' is missing, Exception during check execution: NoMethodError - undefined method 'num_glyphs' for nil"
+ },
+ "otf|fonttools-test-woff|name": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Font structure validation failed for check 'required_tables', Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing"
+ },
+ "otf|fonttools-test-woff|post": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'post' is missing"
+ },
+ "otf|mona-sans-vf-all-axes|gvar": {
+  "ok": true
+ },
+ "otf|names-mac-roman-only|glyf": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Table 'name' failed validation"
+ },
+ "otf|noto-sans-vf-wdth-wght|gvar": {
+  "ok": true
+ },
+ "otf|quirk-empty-cmap-table|glyf": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Table 'cmap' failed validation, Table 'cmap' failed validation, Table 'cmap' failed validation"
+ },
+ "otf|quirk-empty-name-table|glyf": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Table 'name' failed validation, Table 'name' failed validation, Table 'name' failed validation"
+ },
+ "otf|source-sans-3-regular-otf-woff|OS/2": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing"
+ },
+ "otf|source-sans-3-regular-otf-woff|cmap": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing, Exception during check execution: NoMethodError - undefined method 'valid_glyph_indices?' for nil"
+ },
+ "otf|source-sans-3-regular-otf-woff|head": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Font structure validation failed for check 'required_tables', Required table 'head' is missing, Required table 'head' is missing, Required table 'head' is missing"
+ },
+ "otf|source-sans-3-regular-otf-woff|hhea": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Font structure validation failed for check 'required_tables', Required table 'hhea' is missing, Required table 'hhea' is missing"
+ },
+ "otf|source-sans-3-regular-otf-woff|maxp": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Font structure validation failed for check 'required_tables', Required table 'maxp' is missing, Required table 'maxp' is missing, Exception during check execution: NoMethodError - undefined method 'num_glyphs' for nil"
+ },
+ "otf|source-sans-3-regular-otf-woff|name": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Font structure validation failed for check 'required_tables', Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing"
+ },
+ "otf|source-sans-3-regular-otf-woff|post": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'post' is missing"
+ },
+ "otf|source-sans-3-vf-italic-ttf|gvar": {
+  "ok": true
+ },
+ "otf|source-sans-3-vf-upright-ttf|gvar": {
+  "ok": true
+ },
+ "ttf|fonttools-test-otf|CFF ": {
+  "error": "Conversion failed: Transformation failed: Cannot detect font format: missing both CFF and glyf tables"
+ },
+ "ttf|fonttools-test-woff|CFF ": {
+  "error": "Conversion failed: Transformation failed: Cannot detect font format: missing both CFF and glyf tables"
+ },
+ "ttf|noto-sans-jp-subset-regular-otf|CFF ": {
+  "error": "Conversion failed: Transformation failed: Cannot detect font format: missing both CFF and glyf tables"
+ },
+ "ttf|quirk-sfnt-version-otto-on-glyf|OS/2": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing"
+ },
+ "ttf|quirk-sfnt-version-otto-on-glyf|cmap": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing, Exception during check execution: NoMethodError - undefined method 'valid_glyph_indices?' for nil"
+ },
+ "ttf|quirk-sfnt-version-otto-on-glyf|glyf": {
+  "error": "Conversion failed: Transformation failed: Cannot detect font format: missing both CFF and glyf tables"
+ },
+ "ttf|quirk-sfnt-version-otto-on-glyf|head": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Font structure validation failed for check 'required_tables', Required table 'head' is missing, Required table 'head' is missing, Required table 'head' is missing, Exception during check execution: NoMethodError - undefined method 'index_to_loc_format' for nil, Exception during check execution: NoMethodError - undefined method 'index_to_loc_format' for nil, Exception during check execution: NoMethodError - undefined method 'index_to_loc_format' for nil"
+ },
+ "ttf|quirk-sfnt-version-otto-on-glyf|hhea": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Font structure validation failed for check 'required_tables', Required table 'hhea' is missing, Required table 'hhea' is missing"
+ },
+ "ttf|quirk-sfnt-version-otto-on-glyf|loca": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Exception during check execution: NoMethodError - undefined method 'parsed?' for nil, Exception during check execution: NoMethodError - undefined method 'parsed?' for nil, Exception during check execution: NoMethodError - undefined method 'parsed?' for nil"
+ },
+ "ttf|quirk-sfnt-version-otto-on-glyf|maxp": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Font structure validation failed for check 'required_tables', Required table 'maxp' is missing, Required table 'maxp' is missing, Exception during check execution: NoMethodError - undefined method 'num_glyphs' for nil, Exception during check execution: NoMethodError - undefined method 'num_glyphs' for nil, Exception during check execution: NoMethodError - undefined method 'num_glyphs' for nil, Exception during check execution: NoMethodError - undefined method 'num_glyphs' for nil"
+ },
+ "ttf|quirk-sfnt-version-otto-on-glyf|name": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Font structure validation failed for check 'required_tables', Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing"
+ },
+ "ttf|quirk-sfnt-version-otto-on-glyf|post": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'post' is missing"
+ },
+ "ttf|source-sans-3-regular-otf-woff|CFF ": {
+  "error": "Conversion failed: Transformation failed: Cannot detect font format: missing both CFF and glyf tables"
+ },
+ "ttf|source-sans-3-regular-otf|CFF ": {
+  "error": "Conversion failed: Transformation failed: Cannot detect font format: missing both CFF and glyf tables"
+ },
+ "ttf|source-sans-3-regular-ttf-woff|OS/2": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing"
+ },
+ "ttf|source-sans-3-regular-ttf-woff|cmap": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing, Exception during check execution: NoMethodError - undefined method 'valid_glyph_indices?' for nil"
+ },
+ "ttf|source-sans-3-regular-ttf-woff|glyf": {
+  "error": "Conversion failed: Transformation failed: Cannot detect font format: missing both CFF and glyf tables"
+ },
+ "ttf|source-sans-3-regular-ttf-woff|head": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Font structure validation failed for check 'required_tables', Required table 'head' is missing, Required table 'head' is missing, Required table 'head' is missing, Exception during check execution: NoMethodError - undefined method 'index_to_loc_format' for nil, Exception during check execution: NoMethodError - undefined method 'index_to_loc_format' for nil, Exception during check execution: NoMethodError - undefined method 'index_to_loc_format' for nil"
+ },
+ "ttf|source-sans-3-regular-ttf-woff|hhea": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Font structure validation failed for check 'required_tables', Required table 'hhea' is missing, Required table 'hhea' is missing"
+ },
+ "ttf|source-sans-3-regular-ttf-woff|loca": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Exception during check execution: NoMethodError - undefined method 'parsed?' for nil, Exception during check execution: NoMethodError - undefined method 'parsed?' for nil, Exception during check execution: NoMethodError - undefined method 'parsed?' for nil"
+ },
+ "ttf|source-sans-3-regular-ttf-woff|maxp": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Font structure validation failed for check 'required_tables', Required table 'maxp' is missing, Required table 'maxp' is missing, Exception during check execution: NoMethodError - undefined method 'num_glyphs' for nil, Exception during check execution: NoMethodError - undefined method 'num_glyphs' for nil, Exception during check execution: NoMethodError - undefined method 'num_glyphs' for nil, Exception during check execution: NoMethodError - undefined method 'num_glyphs' for nil"
+ },
+ "ttf|source-sans-3-regular-ttf-woff|name": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Font structure validation failed for check 'required_tables', Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing"
+ },
+ "ttf|source-sans-3-regular-ttf-woff|post": {
+  "error": "Conversion failed: Transformation failed: Output validation failed: Required table 'post' is missing"
+ },
+ "ttf|source-sans-3-vf-upright-cff2|CFF2": {
+  "error": "Conversion failed: Transformation failed: Cannot detect font format: missing both CFF and glyf tables"
+ },
+ "woff2|fonttools-test-ttc-v2|glyf": {
+  "error": "Conversion failed: Cannot detect font format"
+ },
+ "woff2|fonttools-test-ttc|glyf": {
+  "error": "Conversion failed: Cannot detect font format"
+ },
+ "woff2|mona-sans-vf-all-axes|gvar": {
+  "ok": true
+ },
+ "woff2|noto-sans-vf-wdth-wght|gvar": {
+  "ok": true
+ },
+ "woff2|source-sans-3-vf-italic-ttf|gvar": {
+  "ok": true
+ },
+ "woff2|source-sans-3-vf-upright-cff2|CFF2": {
+  "error": "Conversion failed: Transformation failed: Font must have either glyf or CFF/CFF2 table"
+ },
+ "woff2|ttc-4members-shared|CFF ": {
+  "error": "Conversion failed: Cannot detect font format"
+ },
+ "woff2|ttc-4members-shared|glyf": {
+  "error": "Conversion failed: Cannot detect font format"
+ },
+ "woff|mona-sans-vf-all-axes|gvar": {
+  "ok": true
+ },
+ "woff|noto-sans-vf-wdth-wght|gvar": {
+  "ok": true
+ },
+ "woff|source-sans-3-vf-italic-ttf|gvar": {
+  "ok": true
+ },
+ "woff|source-sans-3-vf-upright-cff2|CFF2": {
+  "ok": true
+ },
+ "woff|source-sans-3-vf-upright-ttf|gvar": {
+  "ok": true
+ }
+}
