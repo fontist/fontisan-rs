@@ -139,6 +139,10 @@ fn read_matches_goldens_through_the_abi() {
                             "{what}"
                         );
                         g["lazy"] = w["lazy"].clone();
+                        // WOFF1 variants dedup across modes, but Ruby echoes the requested
+                        // mode (docs/divergences.md, tests/divergences.rs pins it).
+                        assert_eq!(g["mode"], json!(key.split('/').next().unwrap()), "{what}");
+                        g["mode"] = w["mode"].clone();
                     }
                     let (g, w) = (&g, &w);
                     let diff: Vec<_> = w

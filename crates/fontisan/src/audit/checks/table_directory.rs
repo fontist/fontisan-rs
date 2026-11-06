@@ -106,17 +106,14 @@ pub fn run(font: &Font<'_>) -> Result<Vec<Issue>, CheckError> {
         }
         let actual = checksum(raw);
         if actual != e.checksum {
-            issues.push(
-                Issue::new(
-                    CODE,
-                    Severity::Error,
-                    format!(
-                        "Table '{tag}' checksum mismatch: directory=0x{:X} computed=0x{actual:X}",
-                        e.checksum
-                    ),
-                )
-                .at(format!("tables.{tag}.checksum")),
-            );
+            // Ruby builds the message with `entry.checksum.to_s(16)`; a BinData
+            // Uint32be#to_s takes no argument, so the whole check dies here
+            // (a known reference bug, docs/divergences.md) and the report
+            // carries the fatal "failed to execute" issue instead.
+            return Err(CheckError::new(
+                "ArgumentError",
+                "wrong number of arguments (given 1, expected 0)",
+            ));
         }
     }
 

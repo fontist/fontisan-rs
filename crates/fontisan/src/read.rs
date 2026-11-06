@@ -4,7 +4,7 @@
 //! error Ruby's `read` would raise ([`error_json`] renders it).
 use crate::json::{Json, obj};
 use crate::sfnt::{
-    AxisValue, DigestFailure, Error, ErrorClass, Font, Format, HvarDigest, IvsDigest, LayoutTable,
+    AxisValue, DigestFailure, Error, ErrorClass, Font, HvarDigest, IvsDigest, LayoutTable,
     MapDigest, Options, Tag, Value, face_count,
 };
 use sha2::{Digest, Sha256};
@@ -240,8 +240,7 @@ pub fn read_face(bytes: &[u8], font: &Font, index: usize) -> Result<Json, Error>
         "format" => font.format().as_str(),
         "file_sha256" => sha_hex(bytes),
         "index" => index,
-        // A WOFF1 face is always `metadata`: Ruby's WoffFont ignores the requested mode.
-        "mode" => if font.format() == Format::Woff { "metadata" } else { font.mode().as_str() },
+        "mode" => font.mode().as_str(),
         "lazy" => font.lazy(),
         "tables" => tables,
         "names" => names,
