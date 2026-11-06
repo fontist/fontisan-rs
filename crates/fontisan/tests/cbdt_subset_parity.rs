@@ -8,6 +8,7 @@
 use fontisan::subset;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+use std::fmt::Write;
 use std::path::PathBuf;
 
 fn dir() -> PathBuf {
@@ -15,10 +16,10 @@ fn dir() -> PathBuf {
 }
 
 fn sha(b: &[u8]) -> String {
-    Sha256::digest(b)
-        .iter()
-        .map(|x| format!("{x:02x}"))
-        .collect()
+    Sha256::digest(b).iter().fold(String::new(), |mut s, x| {
+        let _ = write!(s, "{x:02x}");
+        s
+    })
 }
 
 fn cases() -> Vec<Value> {

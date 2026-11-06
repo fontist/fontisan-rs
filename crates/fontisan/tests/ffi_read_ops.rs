@@ -400,7 +400,7 @@ fn malformed_goldens_match_through_the_abi() {
         .filter(|p| p.extension().is_some_and(|x| x == "json"))
         .collect();
     files.sort();
-    assert_eq!(files.len(), 11);
+    assert_eq!(files.len(), 17);
     let (mut reads, mut audits, mut scans) = (0, 0, 0);
     for path in files {
         let g: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
