@@ -104,9 +104,7 @@ pub fn font_variations(data: &[u8]) {
 /// GSUB/GPOS script and feature walk; the raw input is also parsed as a table body.
 pub fn font_layout(data: &[u8]) {
     let walk = |t: &fontisan::sfnt::LayoutTable| {
-        for script in t.scripts() {
-            let _ = t.features(&script);
-        }
+        let _ = t.script_features();
     };
     if let Ok(t) = fontisan::sfnt::LayoutTable::from_bytes(data) {
         walk(&t);

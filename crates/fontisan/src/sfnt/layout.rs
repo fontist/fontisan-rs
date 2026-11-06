@@ -9,6 +9,8 @@
 //!   partial results are lost;
 //! * building the table itself fails on fewer than 10 bytes (as the other 1c
 //!   records do) and an empty table is the all-zero record.
+use std::collections::{HashMap, HashSet};
+
 use super::cursor::Cursor;
 use super::error::Error;
 use super::font::Font;
@@ -45,13 +47,14 @@ fn non_empty(data: &[u8], start: i64) -> Option<&[u8]> {
     rb_from(data, start).filter(|s| !s.is_empty())
 }
 
+/// `count` x (tag, offset). The whole run is length-checked up front, so a
+/// hostile count fails in O(1) instead of after reading every remaining byte.
 fn read_records(c: &mut Cursor, count: u16) -> Result<Vec<(Tag, u16)>, Error> {
-    let mut v = Vec::with_capacity(usize::from(count).min(c.rest().len() / 6));
-    for _ in 0..count {
-        let tag: Tag = c.bytes(4)?.try_into().unwrap();
-        v.push((tag, c.u16()?));
-    }
-    Ok(v)
+    let run = c.bytes(usize::from(count) * 6)?;
+    Ok(run
+        .chunks_exact(6)
+        .map(|r| (r[..4].try_into().unwrap(), u16::from_be_bytes([r[4], r[5]])))
+        .collect())
 }
 
 /// `ScriptList` / `FeatureList`: u16 count, then `count` x (tag, offset).
@@ -59,6 +62,25 @@ fn tag_list(data: &[u8]) -> Result<Vec<(Tag, u16)>, Error> {
     let mut c = Cursor::new(data, 0);
     let count = c.u16()?;
     read_records(&mut c, count)
+}
+
+/// Work units one `script_features` call may spend, per byte of table. A
+/// well-formed font spends a small fraction of one unit per byte; only a table
+/// whose scripts each re-walk thousands of LangSys records (every script is
+/// otherwise independent, so the work is scripts x table length) can exhaust
+/// it, and then the remaining scripts read as "failed" (`[]`), the same
+/// outcome as any other bad read.
+const WORK_PER_BYTE: usize = 2;
+
+/// Spends `n` units; `Err` (a failed read) once the budget is gone.
+fn spend(budget: &mut usize, n: usize) -> Result<(), Error> {
+    match budget.checked_sub(n) {
+        Some(left) => {
+            *budget = left;
+            Ok(())
+        }
+        None => Cursor::new(&[], 0).u16().map(|_| ()),
+    }
 }
 
 /// Collects the distinct feature indices of many `LangSys` tables in first-seen
@@ -71,33 +93,30 @@ fn tag_list(data: &[u8]) -> Result<Vec<(Tag, u16)>, Error> {
 /// slot" union-find per parity (slot = byte position / 2). A skipped word was
 /// already collected earlier, so the result and its first-seen order are
 /// exactly those of reading every array in full.
+///
+/// All state is sparse (hash maps keyed by the slots actually touched), so
+/// building one costs nothing and a collector's memory is proportional to the
+/// words it read, never to the table length: a table with tens of thousands of
+/// scripts must not pay a table-sized allocation per script.
+#[derive(Default)]
 struct IndexCollector {
-    /// `skip[parity][slot]`: 0 while the slot is unread, else the next slot to try.
-    skip: [Vec<u32>; 2],
-    seen: Vec<bool>,
+    /// `skip[parity][slot]`: absent while the slot is unread, else the next slot to try.
+    skip: [HashMap<usize, usize>; 2],
+    seen: HashSet<u16>,
     out: Vec<u16>,
 }
 
 impl IndexCollector {
-    fn new(len: usize) -> Self {
-        let slots = len / 2 + 2;
-        Self {
-            skip: [vec![0; slots], vec![0; slots]],
-            seen: vec![false; 1 << 16],
-            out: Vec::new(),
-        }
-    }
-
     fn find(&mut self, parity: usize, slot: usize) -> usize {
         let skip = &mut self.skip[parity];
         let mut root = slot;
-        while skip[root] != 0 {
-            root = skip[root] as usize;
+        while let Some(&next) = skip.get(&root) {
+            root = next;
         }
         let mut cur = slot;
         while cur != root {
-            let next = skip[cur] as usize;
-            skip[cur] = root as u32;
+            let next = skip[&cur];
+            skip.insert(cur, root);
             cur = next;
         }
         root
@@ -105,23 +124,25 @@ impl IndexCollector {
 
     /// `LangSys`: reserved u16, required index u16, count u16, `count` x u16,
     /// read at `data[offset..]`; `Err` on a short read, as `Cursor` would.
-    fn add(&mut self, data: &[u8], offset: usize) -> Result<(), Error> {
+    fn add(&mut self, data: &[u8], offset: usize, budget: &mut usize) -> Result<(), Error> {
         let mut c = Cursor::new(&data[offset..], 0);
         c.u16()?;
         c.u16()?;
         let count = usize::from(c.u16()?);
         c.bytes(count * 2)?;
+        spend(budget, 1)?;
         let first = offset + 6;
         let parity = first & 1;
         let (lo, hi) = (first >> 1, (first + 2 * count) >> 1);
         let mut slot = self.find(parity, lo);
         while slot < hi {
             let pos = slot * 2 + parity;
+            spend(budget, 1)?;
             let index = u16::from_be_bytes([data[pos], data[pos + 1]]);
-            if !std::mem::replace(&mut self.seen[usize::from(index)], true) {
+            if self.seen.insert(index) {
                 self.out.push(index);
             }
-            self.skip[parity][slot] = (slot + 1) as u32;
+            self.skip[parity].insert(slot, slot + 1);
             slot = self.find(parity, slot + 1);
         }
         Ok(())
@@ -163,69 +184,106 @@ impl LayoutTable {
             .unwrap_or_default()
     }
 
-    /// Feature indices of the first record for `script`, over its default
-    /// LangSys and every LangSys record; `[]` on any failure.
-    fn feature_indices(&self, script: &Tag) -> Vec<u16> {
-        self.try_feature_indices(script).unwrap_or_default()
-    }
-
-    fn try_feature_indices(&self, script: &Tag) -> Result<Vec<u16>, Error> {
-        let Some(list) = self.script_list() else {
-            return Ok(vec![]);
-        };
-        let scripts = tag_list(list)?;
-        let Some(&(_, offset)) = scripts.iter().find(|(t, _)| t == script) else {
-            return Ok(vec![]);
-        };
+    /// Feature indices of one script record: its default LangSys and every
+    /// LangSys record, deduplicated in first-seen order. `Err` on a short read.
+    fn feature_indices(list: &[u8], offset: u16, budget: &mut usize) -> Result<Vec<u16>, Error> {
         let Some(data) = non_empty(list, i64::from(offset)) else {
             return Ok(vec![]);
         };
         let mut c = Cursor::new(data, 0);
         let default_offset = c.u16()?;
         let count = c.u16()?;
+        spend(budget, usize::from(count))?;
         let langs = read_records(&mut c, count)?;
-        let mut indices = IndexCollector::new(data.len());
+        let mut indices = IndexCollector::default();
         if default_offset != 0 {
             if let Some(d) = non_empty(data, i64::from(default_offset)) {
-                indices.add(data, data.len() - d.len())?;
+                indices.add(data, data.len() - d.len(), budget)?;
             }
         }
         for (_, off) in langs {
             if let Some(d) = non_empty(data, i64::from(off)) {
-                indices.add(data, data.len() - d.len())?;
+                indices.add(data, data.len() - d.len(), budget)?;
             }
         }
         Ok(indices.out)
     }
 
-    /// Feature tags enabled for `script` (unique, in index order); `[]` on any failure.
-    pub fn features(&self, script: &Tag) -> Vec<Tag> {
+    /// Feature tags of one script record (unique, in index order); `[]` on any failure.
+    fn record_features(
+        list: &[u8],
+        offset: u16,
+        features: &[(Tag, u16)],
+        budget: &mut usize,
+    ) -> Vec<Tag> {
+        let indices = Self::feature_indices(list, offset, budget).unwrap_or_default();
+        let mut seen = HashSet::new();
+        indices
+            .into_iter()
+            .filter_map(|i| features.get(usize::from(i)))
+            .filter(|(tag, _)| seen.insert(*tag))
+            .map(|&(tag, _)| tag)
+            .collect()
+    }
+
+    /// The parsed FeatureList records, `None` when `features()` must yield `[]`.
+    fn feature_records(&self) -> Option<Vec<(Tag, u16)>> {
         if self.script_list_offset == 0 || self.feature_list_offset == 0 {
-            return vec![];
+            return None;
         }
-        let indices = self.feature_indices(script);
-        if indices.is_empty() {
-            return vec![];
-        }
-        let Some(list) = non_empty(
+        let list = non_empty(
             &self.table_data,
             i64::from(self.feature_list_offset) - HEADER as i64,
-        ) else {
+        )?;
+        tag_list(list).ok()
+    }
+
+    /// Feature tags enabled for `script` (unique, in index order); `[]` on any failure.
+    pub fn features(&self, script: &Tag) -> Vec<Tag> {
+        let (Some(features), Some(list)) = (self.feature_records(), self.script_list()) else {
             return vec![];
         };
-        let Ok(features) = tag_list(list) else {
+        let Ok(scripts) = tag_list(list) else {
             return vec![];
         };
-        let mut out: Vec<Tag> = Vec::new();
-        let mut seen = std::collections::HashSet::new();
-        for idx in indices {
-            if let Some((tag, _)) = features.get(usize::from(idx)) {
-                if seen.insert(*tag) {
-                    out.push(*tag);
-                }
-            }
+        // One script is bounded by the table itself (<= length/6 records and
+        // <= length/2 distinct words), so a lone lookup needs no budget.
+        let mut unlimited = usize::MAX;
+        match scripts.iter().find(|(t, _)| t == script) {
+            Some(&(_, offset)) => Self::record_features(list, offset, &features, &mut unlimited),
+            None => vec![],
         }
-        out
+    }
+
+    /// `scripts()` paired with `features(script)` for each, in record order
+    /// (duplicates kept). The ScriptList and FeatureList are parsed once and
+    /// each distinct tag is resolved once (the first record of a tag decides),
+    /// and the total LangSys work is capped at `WORK_PER_BYTE` x the table
+    /// length (see there), so the cost is linear in the table, not
+    /// scripts x table length as calling `features` per script would be.
+    pub fn script_features(&self) -> Vec<(Tag, Vec<Tag>)> {
+        if self.script_list_offset == 0 {
+            return vec![];
+        }
+        let Some(list) = self.script_list() else {
+            return vec![];
+        };
+        let Ok(scripts) = tag_list(list) else {
+            return vec![];
+        };
+        let features = self.feature_records();
+        let mut memo: HashMap<Tag, Vec<Tag>> = HashMap::new();
+        let mut budget = self.table_data.len().saturating_mul(WORK_PER_BYTE);
+        scripts
+            .iter()
+            .map(|&(tag, offset)| {
+                let f = memo.entry(tag).or_insert_with(|| match &features {
+                    Some(fs) => Self::record_features(list, offset, fs, &mut budget),
+                    None => vec![],
+                });
+                (tag, f.clone())
+            })
+            .collect()
     }
 }
 

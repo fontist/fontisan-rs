@@ -58,10 +58,11 @@ fn tag(t: &Tag) -> String {
 fn layout_value(r: Result<Option<LayoutTable>, Error>) -> Json {
     match r {
         Ok(Some(t)) => {
-            let scripts = t.scripts();
-            let features: BTreeMap<String, Vec<String>> = scripts
+            let per_script = t.script_features();
+            let scripts: Vec<Tag> = per_script.iter().map(|(s, _)| *s).collect();
+            let features: BTreeMap<String, Vec<String>> = per_script
                 .iter()
-                .map(|s| (tag(s), t.features(s).iter().map(tag).collect()))
+                .map(|(s, f)| (tag(s), f.iter().map(tag).collect()))
                 .collect();
             obj! {
                 "scripts" => scripts.iter().map(tag).collect::<Vec<_>>(),

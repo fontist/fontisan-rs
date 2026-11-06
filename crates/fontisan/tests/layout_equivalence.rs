@@ -130,7 +130,10 @@ fn same(bytes: &[u8]) -> bool {
     let t = LayoutTable::from_bytes(bytes).unwrap();
     let (rs, rf) = reference(bytes);
     let scripts = t.scripts();
-    scripts == rs && scripts.iter().zip(&rf).all(|(s, f)| &t.features(s) == f)
+    let paired: Vec<(T, Vec<T>)> = rs.iter().copied().zip(rf.iter().cloned()).collect();
+    scripts == rs
+        && scripts.iter().zip(&rf).all(|(s, f)| &t.features(s) == f)
+        && t.script_features() == paired
 }
 
 // ---- generator ----
