@@ -390,7 +390,10 @@ impl Post {
     /// name that is not UTF-8 must reach the digest unchanged.
     pub fn glyph_names_raw(&self) -> Vec<Vec<u8>> {
         if self.version_raw == POST_VERSION_1_0 {
-            return STANDARD_NAMES.iter().map(|s| s.as_bytes().to_vec()).collect();
+            return STANDARD_NAMES
+                .iter()
+                .map(|s| s.as_bytes().to_vec())
+                .collect();
         }
         if self.version_raw != POST_VERSION_2_0 || self.remaining_data.is_empty() {
             return Vec::new();

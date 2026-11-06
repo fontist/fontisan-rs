@@ -108,7 +108,8 @@ fn format12(d: &[u8], m: &mut BTreeMap<u32, u32>) {
         if off + 12 > length {
             break;
         }
-        let (Some(start), Some(end), Some(gid)) = (be32(d, off), be32(d, off + 4), be32(d, off + 8))
+        let (Some(start), Some(end), Some(gid)) =
+            (be32(d, off), be32(d, off + 4), be32(d, off + 8))
         else {
             break;
         };
