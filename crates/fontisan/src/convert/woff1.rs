@@ -1,5 +1,6 @@
 //! WOFF 1.0 encode, as `Converters::WoffWriter` (zlib level 6, tables under
-//! 100 bytes or that do not shrink stay stored, source table order).
+//! 100 bytes or that do not shrink stay stored). The table directory is in
+//! ascending tag order, as WOFF 1.0 section 5 requires.
 
 use super::Tables;
 use crate::woff::checksum;
@@ -10,7 +11,7 @@ pub(crate) fn encode(tables: &Tables) -> Vec<u8> {
         orig: &'a [u8],
         stored: Vec<u8>,
     }
-    let ts: Vec<T> = tables
+    let mut ts: Vec<T> = tables
         .iter()
         .map(|(tag, data)| {
             let mut stored = data.clone();
@@ -27,6 +28,7 @@ pub(crate) fn encode(tables: &Tables) -> Vec<u8> {
             }
         })
         .collect();
+    ts.sort_by(|a, b| a.tag.cmp(&b.tag));
     let n = ts.len();
     let mut cursor = 44 + 20 * n;
     let mut dir = Vec::with_capacity(20 * n);
@@ -58,4 +60,19 @@ pub(crate) fn encode(tables: &Tables) -> Vec<u8> {
     out.extend_from_slice(&dir);
     out.extend_from_slice(&body);
     out
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn directory_is_sorted_by_tag_whatever_the_input_order() {
+        let tables = vec![
+            (*b"loca", vec![0u8; 4]),
+            (*b"OS/2", vec![0u8; 4]),
+            (*b"head", vec![0u8; 54]),
+        ];
+        let out = super::encode(&tables);
+        let tags: Vec<&[u8]> = (0..3).map(|i| &out[44 + 20 * i..48 + 20 * i]).collect();
+        assert_eq!(tags, [&b"OS/2"[..], b"head", b"loca"]);
+    }
 }
