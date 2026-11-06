@@ -63,7 +63,8 @@ pub struct Report {
     pub width_class: Option<u16>,
     pub panose: Option<String>,
     pub axes: Vec<Axis>,
-    pub total_codepoints: usize,
+    /// `None` when the font has no `cmap` (Ruby: nil, omitted from the JSON).
+    pub total_codepoints: Option<usize>,
     pub cmap_subtables: Vec<u16>,
     pub total_glyphs: usize,
     pub opentype_scripts: Vec<String>,
@@ -121,7 +122,7 @@ pub fn build_report(
         width_class: None,
         panose: None,
         axes: vec![],
-        total_codepoints: 0,
+        total_codepoints: None,
         cmap_subtables: vec![],
         total_glyphs: 0,
         opentype_scripts: vec![],
@@ -180,7 +181,7 @@ pub fn build_report(
     // coverage
     if face.has_table("cmap") {
         let cmap = face.cmap()?.ok_or_else(|| nil("unicode_mappings"))?;
-        r.total_codepoints = cmap.codepoints().len();
+        r.total_codepoints = Some(cmap.codepoints().len());
         r.cmap_subtables = cmap.subtable_formats();
     }
     r.total_glyphs = if face.has_table("maxp") {
