@@ -86,24 +86,38 @@ fn tag_str(t: &Tag) -> String {
     String::from_utf8_lossy(t).into_owned()
 }
 
-/// `build_report` for one loaded face. `bytes` is the whole source file.
+/// Lowercase hex SHA-256 of the whole source file.
+fn file_sha256(bytes: &[u8]) -> String {
+    #[cfg(test)]
+    FILE_HASHES.with(|c| c.set(c.get() + 1));
+    Sha256::digest(bytes)
+        .iter()
+        .fold(String::new(), |mut s, b| {
+            let _ = write!(s, "{b:02x}");
+            s
+        })
+}
+
+#[cfg(test)]
+thread_local! {
+    static FILE_HASHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// `build_report` for one loaded face. `bytes` is the whole source file and
+/// `source_sha256` its digest, computed once per file by the caller (hashing a
+/// large collection once per face dominated the audit of a 57 MB font).
 pub fn build_report(
     face: &Font<'_>,
     bytes: &[u8],
+    source_sha256: &str,
     source_file: &str,
     font_index: Option<usize>,
     num_fonts: usize,
     validate: bool,
 ) -> Result<Report, Error> {
-    let hex = Sha256::digest(bytes)
-        .iter()
-        .fold(String::new(), |mut s, b| {
-            let _ = write!(s, "{b:02x}");
-            s
-        });
     let mut r = Report {
         source_file: source_file.to_string(),
-        source_sha256: hex,
+        source_sha256: source_sha256.to_string(),
         source_format: detect_format(bytes)
             .map_or("unknown", |f| f.as_str())
             .into(),
@@ -246,9 +260,11 @@ pub fn audit_staged(
         lazy: false,
     };
     let is_collection = detect_format(bytes).is_some_and(|f| f.is_collection());
+    let sha = std::cell::OnceCell::new();
     let one = |i: usize, index: Option<usize>, num: usize| {
         let face = Font::load(bytes, i, opts).map_err(|e| (e, Stage::Load))?;
-        build_report(&face, bytes, source_file, index, num, validate)
+        let sha = sha.get_or_init(|| file_sha256(bytes));
+        build_report(&face, bytes, sha, source_file, index, num, validate)
             .map_err(|e| (e, Stage::Report))
     };
     if !is_collection {
@@ -256,4 +272,34 @@ pub fn audit_staged(
     }
     let num = face_count(bytes).unwrap_or(0);
     (0..num).map(|i| one(i, Some(i), num)).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A collection of `faces` empty sfnt faces.
+    fn collection(faces: u32) -> Vec<u8> {
+        let header = 12 + 4 * faces as usize;
+        let mut b = b"ttcf\0\x01\0\0".to_vec();
+        b.extend_from_slice(&faces.to_be_bytes());
+        for i in 0..faces {
+            b.extend_from_slice(&((header + 12 * i as usize) as u32).to_be_bytes());
+        }
+        for _ in 0..faces {
+            b.extend_from_slice(&[0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        }
+        b
+    }
+
+    #[test]
+    fn a_collection_audit_hashes_the_file_once_and_every_face_carries_it() {
+        let bytes = collection(3);
+        FILE_HASHES.with(|c| c.set(0));
+        let reports = audit_staged(&bytes, "x.ttc", false).expect("audit");
+        assert_eq!(reports.len(), 3);
+        assert_eq!(FILE_HASHES.with(|c| c.get()), 1, "file hashed per face");
+        let want = file_sha256(&bytes);
+        assert!(reports.iter().all(|r| r.source_sha256 == want));
+    }
 }
