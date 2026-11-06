@@ -3,7 +3,7 @@
 
 type R<T> = Result<T, String>;
 
-pub(super) struct Index<'a> {
+pub(crate) struct Index<'a> {
     pub items: Vec<&'a [u8]>,
     pub end: usize,
 }
@@ -17,7 +17,7 @@ fn take(data: &[u8], pos: usize, n: usize) -> R<&[u8]> {
         .ok_or_else(|| "Unexpected end of INDEX data".to_string())
 }
 
-pub(super) fn index(data: &[u8], start: usize) -> R<Index<'_>> {
+pub(crate) fn index(data: &[u8], start: usize) -> R<Index<'_>> {
     let count = usize::from(u16::from_be_bytes(
         take(data, start, 2)?.try_into().unwrap(),
     ));
@@ -126,7 +126,7 @@ fn get(d: &[(u32, Vec<i64>)], op: u32) -> Option<&Vec<i64>> {
     d.iter().find(|(o, _)| *o == op).map(|(_, v)| v)
 }
 
-pub(super) struct Cff<'a> {
+pub(crate) struct Cff<'a> {
     pub charstrings: Vec<&'a [u8]>,
     pub global_subrs: Vec<&'a [u8]>,
     /// None when Ruby's `charstring_for_glyph` returns nil (no Private DICT).
@@ -134,7 +134,7 @@ pub(super) struct Cff<'a> {
     pub has_private: bool,
 }
 
-pub(super) fn parse(data: &[u8]) -> R<Cff<'_>> {
+pub(crate) fn parse(data: &[u8]) -> R<Cff<'_>> {
     let h = data.get(..4).ok_or("Unexpected end of data")?;
     let (major, minor, hdr_size, off_size) = (h[0], h[1], h[2], h[3]);
     if !(major == 1 || major == 2) || minor != 0 || hdr_size < 4 || !(1..=4).contains(&off_size) {

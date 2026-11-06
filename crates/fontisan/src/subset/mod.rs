@@ -10,10 +10,8 @@
 //! CBDT / CBLC), collections.
 
 mod cff;
-mod cffread;
 mod cmap;
 mod glyf;
-mod t2interp;
 
 use std::collections::BTreeSet;
 use std::fmt;

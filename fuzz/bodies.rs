@@ -228,9 +228,8 @@ fn call_op(op: u32, flags: u32, input: &[u8]) {
 /// Successful calls per op (index = op value; the last slot takes anything larger).
 /// The mutation test asserts every op succeeded at least once, so a target whose
 /// well-formed prefix has rotted cannot pass by only ever hitting the error path.
-/// Ops no committed seed can drive to success (no small gvar font is committed).
-pub const NO_SUCCESS_SEED: &[u32] = &[ffi::OP_INSTANCE];
-
+///
+/// OP_INSTANCE is driven by the small variable-font seed `vf-mini-*.ttf`.
 pub static OK_BY_OP: [std::sync::atomic::AtomicUsize; 12] =
     [const { std::sync::atomic::AtomicUsize::new(0) }; 12];
 

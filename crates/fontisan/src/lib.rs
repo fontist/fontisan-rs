@@ -8,6 +8,7 @@
 #![cfg_attr(feature = "ffi", deny(unsafe_code))]
 
 pub mod audit;
+mod cffread;
 pub mod convert;
 pub mod indexability;
 pub mod instance;
@@ -16,6 +17,7 @@ pub mod read;
 pub mod scan;
 pub mod sfnt;
 pub mod subset;
+mod t2interp;
 
 #[cfg(feature = "ffi")]
 pub mod ffi;

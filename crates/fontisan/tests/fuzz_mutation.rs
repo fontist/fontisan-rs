@@ -343,9 +343,6 @@ fn no_parser_panics_on_seeds_or_mutations() {
         .collect();
     eprintln!("fuzz_mutation: successful calls per op {oks:?}");
     for (name, value, target) in bodies::OPS {
-        if bodies::NO_SUCCESS_SEED.contains(value) {
-            continue;
-        }
         assert!(
             oks[*value as usize] > 0,
             "{target}: {name} never succeeded, its well-formed request is broken"
@@ -396,6 +393,145 @@ fn cap_tables(sfnt: &[u8], cap: usize) -> Option<Vec<u8>> {
     Some(out)
 }
 
+fn be16(d: &[u8], at: usize) -> Option<usize> {
+    Some(u16::from_be_bytes(d.get(at..at + 2)?.try_into().ok()?) as usize)
+}
+
+fn be32_at(d: &[u8], at: usize) -> Option<usize> {
+    Some(u32::from_be_bytes(d.get(at..at + 4)?.try_into().ok()?) as usize)
+}
+
+/// Reassembles an sfnt (header copied from `src`) from `(tag, data)` tables.
+fn assemble(src: &[u8], tables: &[([u8; 4], Vec<u8>)]) -> Vec<u8> {
+    let n = tables.len();
+    let mut out = src[..4].to_vec();
+    out.extend((n as u16).to_be_bytes());
+    out.extend([0u8; 6]); // searchRange/entrySelector/rangeShift: the loader ignores them
+    let mut body = Vec::new();
+    for (tag, d) in tables {
+        out.extend_from_slice(tag);
+        out.extend(0u32.to_be_bytes());
+        out.extend(((12 + 16 * n + body.len()) as u32).to_be_bytes());
+        out.extend((d.len() as u32).to_be_bytes());
+        body.extend_from_slice(d);
+        body.resize(body.len() + (4 - d.len() % 4) % 4, 0);
+    }
+    out.extend(body);
+    out
+}
+
+/// A glyf-flavoured variable font cut to its first `keep` glyphs: glyf, loca, hmtx,
+/// gvar, maxp, hhea and post rewritten to match, fvar/avar/head/OS/2 kept, the
+/// per-glyph-indexed (HVAR, MVAR) and bulky (cmap, name, STAT) tables dropped.
+fn mini_vf(sfnt: &[u8], keep: usize) -> Option<Vec<u8>> {
+    let n = be16(sfnt, 4)?;
+    let mut tables: Vec<([u8; 4], Vec<u8>)> = Vec::new();
+    for i in 0..n {
+        let r = sfnt.get(12 + 16 * i..28 + 16 * i)?;
+        let (off, len) = (be32_at(r, 8)?, be32_at(r, 12)?);
+        tables.push((r[0..4].try_into().ok()?, sfnt.get(off..off + len)?.to_vec()));
+    }
+    let get = |t: &[u8; 4]| tables.iter().find(|(g, _)| g == t).map(|(_, d)| d.clone());
+    let (head, hhea, hmtx, loca, glyf, gvar) = (
+        get(b"head")?,
+        get(b"hhea")?,
+        get(b"hmtx")?,
+        get(b"loca")?,
+        get(b"glyf")?,
+        get(b"gvar")?,
+    );
+    let long_loca = be16(&head, 50)? == 1;
+    let loc = |i: usize| -> Option<usize> {
+        if long_loca {
+            be32_at(&loca, 4 * i)
+        } else {
+            be16(&loca, 2 * i).map(|v| v * 2)
+        }
+    };
+    let new_glyf = glyf.get(..loc(keep)?)?.to_vec();
+    let new_loca: Vec<u8> = (0..=keep)
+        .flat_map(|i| (loc(i).unwrap() as u32).to_be_bytes())
+        .collect();
+    let mut head = head;
+    head[50..52].copy_from_slice(&1u16.to_be_bytes()); // loca is rewritten long
+    let nh = be16(&hhea, 34)?;
+    let metric = |i: usize| -> Option<(usize, usize)> {
+        if i < nh {
+            Some((be16(&hmtx, 4 * i)?, be16(&hmtx, 4 * i + 2)?))
+        } else {
+            Some((
+                be16(&hmtx, 4 * (nh - 1))?,
+                be16(&hmtx, 4 * nh + 2 * (i - nh))?,
+            ))
+        }
+    };
+    let mut new_hmtx = Vec::new();
+    for i in 0..keep {
+        let (adv, lsb) = metric(i)?;
+        new_hmtx.extend((adv as u16).to_be_bytes());
+        new_hmtx.extend((lsb as u16).to_be_bytes());
+    }
+    let mut hhea = hhea;
+    hhea[34..36].copy_from_slice(&(keep as u16).to_be_bytes());
+    let mut maxp = get(b"maxp")?;
+    maxp[4..6].copy_from_slice(&(keep as u16).to_be_bytes());
+    let mut post = get(b"post")?.get(..32)?.to_vec();
+    post[..4].copy_from_slice(&0x0003_0000u32.to_be_bytes()); // format 3: no glyph names
+    // gvar: long offsets for the first `keep` glyphs, shared tuples kept.
+    let (axes, shared) = (be16(&gvar, 4)?, be16(&gvar, 6)?);
+    let (shared_off, count, flags, data_off) = (
+        be32_at(&gvar, 8)?,
+        be16(&gvar, 12)?,
+        be16(&gvar, 14)?,
+        be32_at(&gvar, 16)?,
+    );
+    let goff = |i: usize| -> Option<usize> {
+        if flags & 1 == 1 {
+            be32_at(&gvar, 20 + 4 * i)
+        } else {
+            be16(&gvar, 20 + 2 * i).map(|v| v * 2)
+        }
+    };
+    if keep > count {
+        return None;
+    }
+    let tuples = gvar.get(shared_off..shared_off + shared * axes * 2)?;
+    let first = goff(0)?;
+    let mut g = gvar[..20].to_vec();
+    let new_shared_off = 20 + 4 * (keep + 1);
+    let new_data_off = new_shared_off + tuples.len();
+    g[8..12].copy_from_slice(&(new_shared_off as u32).to_be_bytes());
+    g[12..14].copy_from_slice(&(keep as u16).to_be_bytes());
+    g[14..16].copy_from_slice(&1u16.to_be_bytes());
+    g[16..20].copy_from_slice(&(new_data_off as u32).to_be_bytes());
+    for i in 0..=keep {
+        g.extend(((goff(i)? - first) as u32).to_be_bytes());
+    }
+    g.extend_from_slice(tuples);
+    g.extend_from_slice(gvar.get(data_off + first..data_off + goff(keep)?)?);
+    let keep_tags: [&[u8; 4]; 12] = [
+        b"OS/2", b"avar", b"fvar", b"glyf", b"gvar", b"head", b"hhea", b"hmtx", b"loca", b"maxp",
+        b"post", b"cvt ",
+    ];
+    let mut out: Vec<([u8; 4], Vec<u8>)> = Vec::new();
+    for (tag, data) in &tables {
+        let new = match tag {
+            b"head" => head.clone(),
+            b"hhea" => hhea.clone(),
+            b"hmtx" => new_hmtx.clone(),
+            b"loca" => new_loca.clone(),
+            b"glyf" => new_glyf.clone(),
+            b"gvar" => g.clone(),
+            b"maxp" => maxp.clone(),
+            b"post" => post.clone(),
+            t if keep_tags.contains(&t) => data.clone(),
+            _ => continue,
+        };
+        out.push((*tag, new));
+    }
+    Some(assemble(sfnt, &out))
+}
+
 #[test]
 #[ignore = "maintenance: regenerates fuzz/seeds"]
 fn write_seeds() {
@@ -439,4 +575,12 @@ fn write_seeds() {
             put(&format!("capped-{safe}"), &c);
         }
     }
+    // A complete small variable font (fvar/avar/gvar intact) so OP_INSTANCE can succeed:
+    // the engine's subset drops the variation tables, so cut a corpus VF down by hand.
+    let vf = fs::read(corpus.join("fonts/SourceSans3VF-Upright.ttf")).expect("VF source font");
+    let mut mini = mini_vf(&vf, 4).expect("cut the VF");
+    // ffi_instance reads its request from the END of the input: 10 selector bytes then
+    // the mode byte. All zero = zero axes, structured: the default instance, which succeeds.
+    mini.extend([0u8; 11]);
+    put("vf-mini-SourceSans3VF-Upright.ttf", &mini);
 }
