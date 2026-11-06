@@ -8,7 +8,7 @@ use std::process::Command;
 
 /// fontist/fontisan branch issue-156/pr162-next (PR #162 ruby plus table-drop sweep fixes). Bumped when goldens land.
 const FONTISAN_REPO: &str = "https://github.com/fontist/fontisan.git";
-const FONTISAN_SHA: &str = "6c7cee14012b1978ae0f27cdefbd2dac506da380";
+const FONTISAN_SHA: &str = "9a8ff714f6d13116b5776a8a557357cfc52aaf1e";
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
