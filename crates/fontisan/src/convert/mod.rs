@@ -188,6 +188,15 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
             }
             // 1h-o2t: CFF -> glyf conversion.
             if want_glyf && !has(&tables, b"glyf") && has(&tables, b"CFF ") {
+                // Ruby's `OutlineConverter#validate_source_tables`.
+                for tag in [b"head", b"hhea", b"maxp"] {
+                    if !has(&tables, tag) {
+                        return Err(ConvertError::transform(format!(
+                            "Font missing required {} table",
+                            String::from_utf8_lossy(tag)
+                        )));
+                    }
+                }
                 let ttf = outline_o2t::convert(&tables)?;
                 return Ok(write_font(&ttf, 0x0001_0000));
             }

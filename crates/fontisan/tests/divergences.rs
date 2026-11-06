@@ -55,14 +55,19 @@ fn bad_checksum_audit_reports_the_ruby_fatal() {
     assert!(!json.contains("checksum mismatch"), "{json}");
 }
 
-/// A copy of `bytes` (a single-face sfnt) without its `cmap` table. Tables keep
-/// their order and are 4-byte aligned, so the result is deterministic.
+/// A copy of `bytes` (a single-face sfnt) without its `cmap` table.
 fn drop_cmap(bytes: &[u8]) -> Vec<u8> {
+    drop_table(bytes, b"cmap")
+}
+
+/// A copy of `bytes` (a single-face sfnt) without table `tag`. Tables keep
+/// their order and are 4-byte aligned, so the result is deterministic.
+fn drop_table(bytes: &[u8], tag: &[u8; 4]) -> Vec<u8> {
     let u32_at = |o: usize| u32::from_be_bytes(bytes[o..o + 4].try_into().unwrap()) as usize;
     let n = usize::from(u16::from_be_bytes([bytes[4], bytes[5]]));
     let kept: Vec<usize> = (0..n)
         .map(|i| 12 + 16 * i)
-        .filter(|&r| &bytes[r..r + 4] != b"cmap")
+        .filter(|&r| &bytes[r..r + 4] != tag)
         .collect();
     let m = kept.len();
     let es = m.ilog2() as usize;
@@ -109,5 +114,56 @@ fn cmap_less_font_audit_omits_total_codepoints_like_ruby() {
         let got: serde_json::Value = serde_json::from_str(&got[0].to_json().render()).unwrap();
         let want: serde_json::Value = serde_json::from_str(want).unwrap();
         assert_eq!(got, want[0], "validate={validate}");
+    }
+}
+
+/// Measured in fontisan-phase2 (Ruby 3.4.8), `TestOTF.otf` with `maxp` dropped
+/// (this test's `drop_table`), same command as the cmap-less case. Ruby reports
+/// `total_glyphs` 0 (not nil) without `maxp`. With validation, the
+/// `format_round_trip` check is silent because Ruby's OTF->TTF conversion
+/// raises "Font missing required maxp table" (`OutlineConverter#validate_source_tables`),
+/// so no "glyph count changed from 0 to 6" warning appears.
+#[test]
+fn maxp_less_font_audit_matches_ruby() {
+    let Some(corpus) = corpus() else { return };
+    let bytes = drop_table(
+        &std::fs::read(corpus.join("fonts/TestOTF.otf")).unwrap(),
+        b"maxp",
+    );
+    let ruby = [
+        (
+            false,
+            r#"[{"axes":[],"bold":false,"cmap_subtables":[4,6],"family_name":"Test OTF","font_revision_raw":65536,"full_name":"Test OTF","is_variable":false,"italic":false,"num_fonts_in_source":1,"panose":"2 11 6 4 4 2 7 8 1 4","postscript_name":"TestOTF-Regular","source_file":"nomaxp-TestOTF.otf","source_format":"otf","source_sha256":"1906eda710f9eb13ee768a97792147521b6de6371f9ebfedc7999c466e39e7b8","subfamily_name":"Regular","total_codepoints":5,"total_glyphs":0,"version":"Version 1.000","weight_class":400,"width_class":5}]"#,
+        ),
+        (
+            true,
+            r#"[{"axes":[],"bold":false,"cmap_subtables":[4,6],"family_name":"Test OTF","font_revision_raw":65536,"full_name":"Test OTF","is_variable":false,"italic":false,"num_fonts_in_source":1,"panose":"2 11 6 4 4 2 7 8 1 4","postscript_name":"TestOTF-Regular","source_file":"nomaxp-TestOTF.otf","source_format":"otf","source_sha256":"1906eda710f9eb13ee768a97792147521b6de6371f9ebfedc7999c466e39e7b8","subfamily_name":"Regular","total_codepoints":5,"total_glyphs":0,"validation_issues":[{"category":"ots_compatibility","location":"tables.maxp","message":"OTS: required table 'maxp' is missing","severity":"error"},{"category":"hinting","location":"cff.private_dict","message":"CFF Private DICT has no BlueValues or StdHW/StdVW — alignment zones and stem widths are the primary hinting mechanism for CFF outlines","severity":"info"},{"category":"opentype_conformance","location":"tables.maxp","message":"Required table 'maxp' is missing for this sfnt flavor","severity":"error"},{"category":"naming_consistency","location":"name.consistency.full_name","message":"Full name 'Test OTF' doesn't match Family + Subfamily 'Test OTF Regular'","severity":"info"}],"validation_summary":{"error_count":2,"fatal_count":0,"info_count":2,"passed":false,"total":4,"warning_count":0},"version":"Version 1.000","weight_class":400,"width_class":5}]"#,
+        ),
+    ];
+    for (validate, want) in ruby {
+        let got = audit::audit(&bytes, "nomaxp-TestOTF.otf", validate).unwrap();
+        let got: serde_json::Value = serde_json::from_str(&got[0].to_json().render()).unwrap();
+        let want: serde_json::Value = serde_json::from_str(want).unwrap();
+        assert_eq!(got, want[0], "validate={validate}");
+    }
+}
+
+/// Measured in fontisan-phase2 (Ruby 3.4.8):
+///   Fontisan::Reference.convert("no<tag>-TestOTF.otf", to: :ttf, output: ...)
+/// raises `Fontisan::Error` "Conversion failed: Transformation failed: Font
+/// missing required <tag> table" for `head`, `hhea` and `maxp` dropped.
+#[test]
+fn cff_to_ttf_without_head_hhea_or_maxp_fails_like_ruby() {
+    let Some(corpus) = corpus() else { return };
+    let src = std::fs::read(corpus.join("fonts/TestOTF.otf")).unwrap();
+    for tag in [b"head", b"hhea", b"maxp"] {
+        let name = String::from_utf8_lossy(tag).into_owned();
+        let err =
+            fontisan::convert::convert(&drop_table(&src, tag), fontisan::convert::Target::Ttf, 0)
+                .expect_err(&name);
+        assert_eq!(
+            err.message,
+            format!("Conversion failed: Transformation failed: Font missing required {name} table"),
+        );
     }
 }
