@@ -117,6 +117,48 @@ fn has(tables: &Tables, tag: &[u8; 4]) -> bool {
     tables.iter().any(|(t, _)| t == tag)
 }
 
+/// Ruby's `OutlineConverter#validate_source_tables`: `head`, `hhea`, `maxp`, in that order.
+fn require_core_tables(tables: &Tables) -> Result<(), ConvertError> {
+    for tag in [b"head", b"hhea", b"maxp"] {
+        if !has(tables, tag) {
+            return Err(ConvertError::transform(format!(
+                "Font missing required {} table",
+                String::from_utf8_lossy(tag)
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Ruby's output validation of a CFF -> TrueType result when a required table
+/// is absent from the source. Ruby's wording repeats the "is missing" clause once
+/// per failing check; the text below is its measured output for a single missing table.
+fn validate_ttf_output(ttf: &Tables) -> Result<(), ConvertError> {
+    const MISSING: [(&[u8; 4], &str); 4] = [
+        (b"post", "Required table 'post' is missing"),
+        (
+            b"name",
+            "Font structure validation failed for check 'required_tables', Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing",
+        ),
+        (
+            b"OS/2",
+            "Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing",
+        ),
+        (
+            b"cmap",
+            "Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing, Exception during check execution: NoMethodError - undefined method 'valid_glyph_indices?' for nil",
+        ),
+    ];
+    for (tag, msg) in MISSING {
+        if !has(ttf, tag) {
+            return Err(ConvertError::transform(format!(
+                "Output validation failed: {msg}"
+            )));
+        }
+    }
+    Ok(())
+}
+
 /// `Fontisan.convert(input, to: target)` for static fonts. `timestamp` is
 /// used by WOFF2 encode only (head.modified, Ruby's encoder rules).
 pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, ConvertError> {
@@ -181,6 +223,7 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
             let want_glyf = target == Target::Ttf;
             if has(&tables, b"glyf") && !want_glyf {
                 // 1h-t2o: glyf -> CFF outline conversion.
+                require_core_tables(&tables)?;
                 let converted = outline_t2o::convert_ttf_to_otf(&tables)?;
                 let out = write_font(&converted, 0x4F54_544F);
                 outline_t2o::validate_output(&converted)?;
@@ -188,16 +231,9 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
             }
             // 1h-o2t: CFF -> glyf conversion.
             if want_glyf && !has(&tables, b"glyf") && has(&tables, b"CFF ") {
-                // Ruby's `OutlineConverter#validate_source_tables`.
-                for tag in [b"head", b"hhea", b"maxp"] {
-                    if !has(&tables, tag) {
-                        return Err(ConvertError::transform(format!(
-                            "Font missing required {} table",
-                            String::from_utf8_lossy(tag)
-                        )));
-                    }
-                }
+                require_core_tables(&tables)?;
                 let ttf = outline_o2t::convert(&tables)?;
+                validate_ttf_output(&ttf)?;
                 return Ok(write_font(&ttf, 0x0001_0000));
             }
             // end 1h-o2t

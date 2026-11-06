@@ -167,3 +167,61 @@ fn cff_to_ttf_without_head_hhea_or_maxp_fails_like_ruby() {
         );
     }
 }
+
+/// Measured in fontisan-phase2 (Ruby 3.4.8), `Fontisan::Reference.convert(
+/// "no<tag>-TestOTF.otf", to: :ttf, output: ...)`: each raises
+/// `Fontisan::Error` with the message below (Ruby repeats a clause once per
+/// failing validation check; pinned verbatim for a single missing table).
+#[test]
+fn cff_to_ttf_without_post_name_os2_or_cmap_fails_like_ruby() {
+    let Some(corpus) = corpus() else { return };
+    let src = std::fs::read(corpus.join("fonts/TestOTF.otf")).unwrap();
+    let want: [(&[u8; 4], &str); 4] = [
+        (
+            b"post",
+            "Output validation failed: Required table 'post' is missing",
+        ),
+        (
+            b"name",
+            "Output validation failed: Font structure validation failed for check 'required_tables', Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing",
+        ),
+        (
+            b"OS/2",
+            "Output validation failed: Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing",
+        ),
+        (
+            b"cmap",
+            "Output validation failed: Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing, Exception during check execution: NoMethodError - undefined method 'valid_glyph_indices?' for nil",
+        ),
+    ];
+    for (tag, msg) in want {
+        let name = String::from_utf8_lossy(tag).into_owned();
+        let err =
+            fontisan::convert::convert(&drop_table(&src, tag), fontisan::convert::Target::Ttf, 0)
+                .expect_err(&name);
+        assert_eq!(
+            err.message,
+            format!("Conversion failed: Transformation failed: {msg}"),
+            "{name}"
+        );
+    }
+}
+
+/// Measured in fontisan-phase2 (Ruby 3.4.8), `TestTTF.ttf` with `head`, `hhea`
+/// or `maxp` dropped, converted `to: :otf`: "Conversion failed: Transformation
+/// failed: Font missing required <tag> table".
+#[test]
+fn ttf_to_otf_without_head_hhea_or_maxp_fails_like_ruby() {
+    let Some(corpus) = corpus() else { return };
+    let src = std::fs::read(corpus.join("fonts/TestTTF.ttf")).unwrap();
+    for tag in [b"head", b"hhea", b"maxp"] {
+        let name = String::from_utf8_lossy(tag).into_owned();
+        let err =
+            fontisan::convert::convert(&drop_table(&src, tag), fontisan::convert::Target::Otf, 0)
+                .expect_err(&name);
+        assert_eq!(
+            err.message,
+            format!("Conversion failed: Transformation failed: Font missing required {name} table"),
+        );
+    }
+}
