@@ -126,9 +126,17 @@ fn decode(input: &[u8]) -> Result<Vec<u8>, SubsetError> {
             // block lacks the 4-byte padding, which the strict decoder rejects.
             crate::sfnt::woff2_view::single(input).map_err(|e| wrap(format!("{e:?}")))
         }
-        Some(Format::Ttc | Format::Otc | Format::Woff2Collection) => Err(SubsetError::unsupported(
-            "collection subsetting is not part of card 1i-subset",
-        )),
+        // Ruby loads face 0 of a collection and subsets it as a single font.
+        Some(Format::Ttc | Format::Otc) => crate::convert::first_face(input).map_err(|e| {
+            wrap(
+                e.message
+                    .trim_start_matches("Conversion failed: Transformation failed: ")
+                    .to_string(),
+            )
+        }),
+        Some(Format::Woff2Collection) => crate::sfnt::woff2_view::collection(input, 0)
+            .map_err(|e| wrap(format!("{e:?}")))?
+            .map_err(|_| wrap("collection index out of range".to_string())),
         _ => Err(SubsetError::new(
             "Fontisan::InvalidFontError",
             "unrecognised font format",
@@ -249,7 +257,7 @@ fn strategy(
         "cmap" => cmap::subset(data, mapping),
         "CFF " => cff::subset(tables, mapping, data, num_glyphs),
         "CFF2" | "CBDT" | "CBLC" => Err(SubsetError::unsupported(format!(
-            "subsetting the {} table is not part of card 1i-subset",
+            "subsetting the {} table is not supported",
             tag.trim_end()
         ))),
         _ => Ok(data.to_vec()),

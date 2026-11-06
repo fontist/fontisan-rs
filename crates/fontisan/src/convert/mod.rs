@@ -18,6 +18,7 @@ use std::fmt;
 
 use crate::sfnt::{self, Format};
 
+pub(crate) use collection::first_face;
 pub use extract::{Extracted, extract};
 pub use writer::write_font;
 
