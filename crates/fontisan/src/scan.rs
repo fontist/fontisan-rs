@@ -544,13 +544,20 @@ pub const FONT_EXTENSIONS: [&str; 9] = [
 
 /// Font files under `root`, recursively, sorted by path (byte order). A file
 /// `root` yields itself. Directory symlinks are not followed; non-font
-/// extensions are skipped.
+/// extensions are skipped; an unreadable directory is skipped, as in Ruby.
 pub fn font_files(root: &std::path::Path) -> std::io::Result<Vec<std::path::PathBuf>> {
     fn walk(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) -> std::io::Result<()> {
-        for entry in std::fs::read_dir(dir)? {
-            let entry = entry?;
+        // Ruby's `Dir.glob("**/*")` silently skips a directory it cannot read
+        // (and entries it cannot stat); one locked folder must not lose the batch.
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return Ok(());
+        };
+        for entry in entries {
+            let Ok(entry) = entry else { continue };
             let path = entry.path();
-            let kind = entry.file_type()?;
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
             if kind.is_dir() {
                 walk(&path, out)?;
             } else if (kind.is_file() || (kind.is_symlink() && path.is_file()))
