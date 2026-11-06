@@ -9,12 +9,12 @@
 //! does not exist, and the `NoMethodError` is swallowed by `extract_info`
 //! before the PostScript name is set.
 
-use super::cffread;
 use super::glyf::hmtx_metrics;
-use super::t2interp::{Interp, Seg};
 use super::{Mapping, SubsetError, find};
+use crate::cffread;
 use crate::convert::Tables;
 use crate::sfnt::Post;
+use crate::t2interp::{Interp, Seg};
 
 /// One UFO glyph: its (unique) name, advance and path.
 struct Glyph {

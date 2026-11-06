@@ -1,6 +1,6 @@
 //! The canonical audit JSON: nil and empty collections omitted, except the
 //! fields that are always present (`axes`, `font_revision_raw`,
-//! `total_codepoints`, `total_glyphs`, ...). Parity-tested against the audit
+//! `total_glyphs`, ...; `total_codepoints` only when the font has a `cmap`). Parity-tested against the audit
 //! goldens through the C ABI (`tests/ffi_read_ops.rs`).
 use super::report::{Report, Summary};
 use super::types::Issue;
@@ -67,7 +67,9 @@ impl Report {
                     .collect(),
             ),
         ));
-        o.push(("total_codepoints", self.total_codepoints.into()));
+        if let Some(n) = self.total_codepoints {
+            o.push(("total_codepoints", n.into()));
+        }
         if !self.cmap_subtables.is_empty() {
             o.push(("cmap_subtables", self.cmap_subtables.clone().into()));
         }

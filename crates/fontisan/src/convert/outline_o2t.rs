@@ -4,11 +4,8 @@
 //! `charstring.rs`). The cubic is approximated by ONE quadratic whose control
 //! point is the mean of the two cubic controls.
 
-mod cff;
-mod charstring;
-
 use super::{ConvertError, Tables};
-use charstring::{Interp, Seg};
+use crate::t2interp::{Interp, Seg};
 
 #[derive(Clone, Copy)]
 enum Cmd {
@@ -177,7 +174,7 @@ pub(crate) fn convert(tables: &Tables) -> Result<Tables, ConvertError> {
     };
     let cff_data = table(b"CFF ").ok_or_else(|| ConvertError::transform("CFF table not found"))?;
     let corrupt = |e: String| ConvertError::transform(format!("Failed to parse CFF table: {e}"));
-    let cff = cff::parse(cff_data).map_err(corrupt)?;
+    let cff = crate::cffread::parse(cff_data).map_err(corrupt)?;
     let n = cff.charstrings.len();
 
     let mut glyf: Vec<u8> = vec![];

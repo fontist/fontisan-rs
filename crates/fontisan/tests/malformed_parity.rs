@@ -3,10 +3,7 @@
 //! sfnt model. Messages and numbers are normalised as the goldens are (digit
 //! runs masked).
 //!
-//! TODO(0e): goldens are read from the fetched checkout when it has
-//! `corpus/goldens/malformed` (xtask pins an older fontisan SHA that lacks
-//! them), else from the committed copy in tests/data/malformed (fontisan
-//! commit 24fc12f); drop the copy when the pin moves.
+//! Goldens come from the checkout xtask fetches at the pinned fontisan SHA.
 mod common;
 
 use common::*;
@@ -40,12 +37,14 @@ fn err_json(e: &Error) -> Value {
 }
 
 fn golden_dir() -> std::path::PathBuf {
-    let fetched = corpus_dir().join("corpus/goldens/malformed");
-    if fetched.is_dir() {
-        fetched
-    } else {
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/malformed")
-    }
+    corpus_dir().join("corpus/goldens/malformed")
+}
+
+/// Ruby's `nil.<method>` on an absent table: the reference reads tables with
+/// `font.table("x").method`, so a missing table is a NoMethodError, not a nil.
+fn nil_table(method: &str) -> Value {
+    json!({"outcome": "error", "error_class": "NoMethodError",
+           "message": format!("undefined method '{method}' for nil"), "causes": []})
 }
 
 /// What Reference.read raises for a face: the first of name, head, hhea, maxp,
@@ -109,19 +108,30 @@ fn malformed_goldens_match() {
                         "load",
                         json!({"outcome": "ok", "format": font.format().ruby_class()}),
                     );
-                    note("name", ok_or(font.name().map(|n| {
-                        json!({"outcome": "ok", "family": n.and_then(|n| n.english_name(1))})
-                    })));
+                    note(
+                        "name",
+                        ok_or(font.name().map(|n| match n {
+                            Some(n) => json!({"outcome": "ok", "family": n.english_name(1)}),
+                            None => nil_table("english_name"),
+                        })),
+                    );
                     note(
                         "table_head",
-                        ok_or(font.head().map(
-                            |h| json!({"outcome": "ok", "units_per_em": h.map(|h| h.units_per_em)}),
-                        )),
+                        ok_or(font.head().map(|h| match h {
+                            Some(h) => json!({"outcome": "ok", "units_per_em": h.units_per_em}),
+                            None => nil_table("units_per_em"),
+                        })),
                     );
                     if opts.mode == LoadingMode::Full {
-                        note("table_cmap", ok_or(font.cmap().map(|c| {
-                            json!({"outcome": "ok", "mappings": c.map(|c| c.codepoints().len())})
-                        })));
+                        note(
+                            "table_cmap",
+                            ok_or(font.cmap().map(|c| match c {
+                                Some(c) => {
+                                    json!({"outcome": "ok", "mappings": c.codepoints().len()})
+                                }
+                                None => nil_table("unicode_mappings"),
+                            })),
+                        );
                     }
                     // `read` carries a digest that needs outlines (1d): compare outcome only.
                     let read = match read_error(font) {
@@ -153,5 +163,5 @@ fn malformed_goldens_match() {
         }
         kinds += 1;
     }
-    assert_eq!(kinds, 8, "malformed kinds");
+    assert_eq!(kinds, 11, "malformed kinds");
 }

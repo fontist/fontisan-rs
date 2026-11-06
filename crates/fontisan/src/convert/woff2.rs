@@ -20,6 +20,22 @@ pub(crate) fn transform_glyf(
     transform::transform(glyf, loca, num_glyphs, index_long)
 }
 
+/// Padded `glyf`/`loca` pair for a collection member whose short `loca` would
+/// wrap: Ruby re-emits it with a long `loca` (`CollectionEncoder`).
+pub(crate) fn canonical_long_loca(
+    glyf: &[u8],
+    loca: &[u8],
+    num_glyphs: usize,
+) -> Result<(Vec<u8>, Vec<u8>), Error> {
+    let c = transform::canonicalize(glyf, loca, num_glyphs, false, true)?;
+    Ok((c.glyf, c.loca))
+}
+
+/// True when a short `loca` cannot index the 4-byte padded `glyf`.
+pub(crate) fn short_loca_overflows(glyf_len: usize, num_glyphs: usize) -> bool {
+    glyf_len + 3 * num_glyphs > SHORT_LOCA_GLYF_MAX
+}
+
 use std::collections::BTreeMap;
 use std::fmt;
 
@@ -217,11 +233,7 @@ fn encode_tables(
         let num_glyphs = usize::from(u16_at(&t[b"maxp"], 4)?);
         let source_long = u16_at(&t[b"head"], 50)? != 0;
         let glyf_len = t[b"glyf"].len();
-        let target_long = if glyf_len + 3 * num_glyphs <= SHORT_LOCA_GLYF_MAX {
-            false
-        } else {
-            source_long
-        };
+        let target_long = short_loca_overflows(glyf_len, num_glyphs);
         let canon = transform::canonicalize(
             &t[b"glyf"],
             &t[b"loca"],

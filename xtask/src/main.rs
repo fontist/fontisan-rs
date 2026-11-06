@@ -6,9 +6,9 @@ use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// fontist/fontisan branch issue-156/phase0-corpus-baselines (PR #161). Bumped when goldens land.
+/// fontist/fontisan branch issue-156/pr162-next (PR #162 ruby plus table-drop sweep fixes). Bumped when goldens land.
 const FONTISAN_REPO: &str = "https://github.com/fontist/fontisan.git";
-const FONTISAN_SHA: &str = "a9b6a39a2e55314fba36a3ad066f3e42ca3f1f3b";
+const FONTISAN_SHA: &str = "6c7cee14012b1978ae0f27cdefbd2dac506da380";
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -392,12 +392,7 @@ fn scan_and_audit_dir_serve_a_mixed_directory_in_one_call() {
 #[test]
 fn malformed_goldens_match_through_the_abi() {
     let Some(corpus) = corpus() else { return };
-    let fetched = corpus_dir().join("corpus/goldens/malformed");
-    let dir = if fetched.is_dir() {
-        fetched
-    } else {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/malformed")
-    };
+    let dir = corpus_dir().join("corpus/goldens/malformed");
     let mut files: Vec<_> = std::fs::read_dir(&dir)
         .unwrap()
         .flatten()
@@ -405,7 +400,7 @@ fn malformed_goldens_match_through_the_abi() {
         .filter(|p| p.extension().is_some_and(|x| x == "json"))
         .collect();
     files.sort();
-    assert_eq!(files.len(), 8);
+    assert_eq!(files.len(), 11);
     let (mut reads, mut audits, mut scans) = (0, 0, 0);
     for path in files {
         let g: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();

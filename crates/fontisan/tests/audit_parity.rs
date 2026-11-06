@@ -78,7 +78,9 @@ fn report_json(r: &Report) -> Value {
                 .collect::<Vec<_>>()
         ),
     );
-    put("total_codepoints", json!(r.total_codepoints));
+    if let Some(n) = r.total_codepoints {
+        put("total_codepoints", json!(n));
+    }
     if !r.cmap_subtables.is_empty() {
         put("cmap_subtables", json!(r.cmap_subtables));
     }

@@ -5,7 +5,7 @@
 //! bytes as operators and numbers).
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(super) enum Seg {
+pub(crate) enum Seg {
     Move(f64, f64),
     Line(f64, f64),
     Curve([f64; 6]),
@@ -15,7 +15,7 @@ type R<T> = Result<T, String>;
 
 const MAX_DEPTH: usize = 64;
 
-pub(super) struct Interp<'a> {
+pub(crate) struct Interp<'a> {
     gsubrs: &'a [&'a [u8]],
     lsubrs: Option<&'a [&'a [u8]]>,
     gbias: usize,
