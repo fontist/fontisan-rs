@@ -225,3 +225,66 @@ fn ttf_to_otf_without_head_hhea_or_maxp_fails_like_ruby() {
         );
     }
 }
+
+/// Ruby's audit JSON (validate false and true) for a font with one table
+/// dropped, measured in fontisan-phase2 (Ruby 3.4.8) with the same command as
+/// the cmap-less case; the keys are `<font>/<TAG with / removed>/<validate>`.
+/// Covers the round-trip check, which Ruby silences when its conversion raises.
+#[test]
+fn audit_of_fonts_missing_a_table_matches_ruby() {
+    let Some(corpus) = corpus() else { return };
+    let fx: serde_json::Value =
+        serde_json::from_str(include_str!("divergences/audit_missing_tables.json")).unwrap();
+    for (key, want) in fx.as_object().unwrap() {
+        let parts: Vec<&str> = key.split('/').collect();
+        let (font, tag, validate) = (parts[0], parts[1], parts[2] == "true");
+        let tag4: [u8; 4] = match tag {
+            "OS2" => *b"OS/2",
+            t => t.as_bytes().try_into().unwrap(),
+        };
+        let bytes = drop_table(
+            &std::fs::read(corpus.join("fonts").join(font)).unwrap(),
+            &tag4,
+        );
+        let name = format!("no{tag}-{font}");
+        let got = audit::audit(&bytes, &name, validate).unwrap();
+        let got: serde_json::Value = serde_json::from_str(&got[0].to_json().render()).unwrap();
+        assert_eq!(&got, want, "{key}");
+    }
+}
+
+/// Measured in fontisan-phase2 (Ruby 3.4.8), `TestTTF.ttf` with one table
+/// dropped, `Fontisan::Reference.convert(..., to: :otf, output: ...)`. The
+/// `name` text is Ruby's own encoding error, pinned verbatim.
+#[test]
+fn ttf_to_otf_without_loca_name_post_os2_or_cmap_fails_like_ruby() {
+    let Some(corpus) = corpus() else { return };
+    let src = std::fs::read(corpus.join("fonts/TestTTF.ttf")).unwrap();
+    let want: [(&[u8; 4], &str); 5] = [
+        (b"loca", "TrueType font missing required glyf or loca table"),
+        (b"name", "item 0 must have BINARY encoding, got: UTF-8"),
+        (
+            b"post",
+            "Output validation failed: Required table 'post' is missing",
+        ),
+        (
+            b"OS/2",
+            "Output validation failed: Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing",
+        ),
+        (
+            b"cmap",
+            "Output validation failed: Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing, Exception during check execution: NoMethodError - undefined method 'valid_glyph_indices?' for nil",
+        ),
+    ];
+    for (tag, msg) in want {
+        let name = String::from_utf8_lossy(tag).into_owned();
+        let err =
+            fontisan::convert::convert(&drop_table(&src, tag), fontisan::convert::Target::Otf, 0)
+                .expect_err(&name);
+        assert_eq!(
+            err.message,
+            format!("Conversion failed: Transformation failed: {msg}"),
+            "{name}"
+        );
+    }
+}

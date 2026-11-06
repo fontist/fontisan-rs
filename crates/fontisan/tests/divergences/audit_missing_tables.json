@@ -1,0 +1,771 @@
+{
+ "TestOTF.otf/OS2/false": {
+  "axes": [],
+  "bold": false,
+  "cmap_subtables": [
+   4,
+   6
+  ],
+  "family_name": "Test OTF",
+  "font_revision_raw": 65536,
+  "full_name": "Test OTF",
+  "is_variable": false,
+  "italic": false,
+  "num_fonts_in_source": 1,
+  "postscript_name": "TestOTF-Regular",
+  "source_file": "noOS2-TestOTF.otf",
+  "source_format": "otf",
+  "source_sha256": "ba9961ff832afc1bd15d495396405d9832d7974c2d4eea7866534d988d123bec",
+  "subfamily_name": "Regular",
+  "total_codepoints": 5,
+  "total_glyphs": 6,
+  "version": "Version 1.000"
+ },
+ "TestOTF.otf/OS2/true": {
+  "axes": [],
+  "bold": false,
+  "cmap_subtables": [
+   4,
+   6
+  ],
+  "family_name": "Test OTF",
+  "font_revision_raw": 65536,
+  "full_name": "Test OTF",
+  "is_variable": false,
+  "italic": false,
+  "num_fonts_in_source": 1,
+  "postscript_name": "TestOTF-Regular",
+  "source_file": "noOS2-TestOTF.otf",
+  "source_format": "otf",
+  "source_sha256": "ba9961ff832afc1bd15d495396405d9832d7974c2d4eea7866534d988d123bec",
+  "subfamily_name": "Regular",
+  "total_codepoints": 5,
+  "total_glyphs": 6,
+  "validation_issues": [
+   {
+    "category": "ots_compatibility",
+    "location": "tables.OS/2",
+    "message": "OTS: required table 'OS/2' is missing",
+    "severity": "error"
+   },
+   {
+    "category": "hinting",
+    "location": "cff.private_dict",
+    "message": "CFF Private DICT has no BlueValues or StdHW/StdVW \u2014 alignment zones and stem widths are the primary hinting mechanism for CFF outlines",
+    "severity": "info"
+   },
+   {
+    "category": "opentype_conformance",
+    "location": "tables.OS/2",
+    "message": "Required table 'OS/2' is missing for this sfnt flavor",
+    "severity": "error"
+   },
+   {
+    "category": "naming_consistency",
+    "location": "name.consistency.full_name",
+    "message": "Full name 'Test OTF' doesn't match Family + Subfamily 'Test OTF Regular'",
+    "severity": "info"
+   }
+  ],
+  "validation_summary": {
+   "error_count": 2,
+   "fatal_count": 0,
+   "info_count": 2,
+   "passed": false,
+   "total": 4,
+   "warning_count": 0
+  },
+  "version": "Version 1.000"
+ },
+ "TestOTF.otf/cmap/false": {
+  "axes": [],
+  "bold": false,
+  "family_name": "Test OTF",
+  "font_revision_raw": 65536,
+  "full_name": "Test OTF",
+  "is_variable": false,
+  "italic": false,
+  "num_fonts_in_source": 1,
+  "panose": "2 11 6 4 4 2 7 8 1 4",
+  "postscript_name": "TestOTF-Regular",
+  "source_file": "nocmap-TestOTF.otf",
+  "source_format": "otf",
+  "source_sha256": "81cbff3eb250b0a201a6c76df49639397529a50b6c93925fb782216e8d8c7d5d",
+  "subfamily_name": "Regular",
+  "total_glyphs": 6,
+  "version": "Version 1.000",
+  "weight_class": 400,
+  "width_class": 5
+ },
+ "TestOTF.otf/cmap/true": {
+  "axes": [],
+  "bold": false,
+  "family_name": "Test OTF",
+  "font_revision_raw": 65536,
+  "full_name": "Test OTF",
+  "is_variable": false,
+  "italic": false,
+  "num_fonts_in_source": 1,
+  "panose": "2 11 6 4 4 2 7 8 1 4",
+  "postscript_name": "TestOTF-Regular",
+  "source_file": "nocmap-TestOTF.otf",
+  "source_format": "otf",
+  "source_sha256": "81cbff3eb250b0a201a6c76df49639397529a50b6c93925fb782216e8d8c7d5d",
+  "subfamily_name": "Regular",
+  "total_glyphs": 6,
+  "validation_issues": [
+   {
+    "category": "ots_compatibility",
+    "location": "tables.cmap",
+    "message": "OTS: required table 'cmap' is missing",
+    "severity": "error"
+   },
+   {
+    "category": "hinting",
+    "location": "cff.private_dict",
+    "message": "CFF Private DICT has no BlueValues or StdHW/StdVW \u2014 alignment zones and stem widths are the primary hinting mechanism for CFF outlines",
+    "severity": "info"
+   },
+   {
+    "category": "opentype_conformance",
+    "location": "tables.cmap",
+    "message": "Required table 'cmap' is missing for this sfnt flavor",
+    "severity": "error"
+   },
+   {
+    "category": "naming_consistency",
+    "location": "name.consistency.full_name",
+    "message": "Full name 'Test OTF' doesn't match Family + Subfamily 'Test OTF Regular'",
+    "severity": "info"
+   }
+  ],
+  "validation_summary": {
+   "error_count": 2,
+   "fatal_count": 0,
+   "info_count": 2,
+   "passed": false,
+   "total": 4,
+   "warning_count": 0
+  },
+  "version": "Version 1.000",
+  "weight_class": 400,
+  "width_class": 5
+ },
+ "TestOTF.otf/name/false": {
+  "axes": [],
+  "bold": false,
+  "cmap_subtables": [
+   4,
+   6
+  ],
+  "font_revision_raw": null,
+  "is_variable": false,
+  "italic": false,
+  "num_fonts_in_source": 1,
+  "panose": "2 11 6 4 4 2 7 8 1 4",
+  "source_file": "noname-TestOTF.otf",
+  "source_format": "otf",
+  "source_sha256": "c7307bab838f2b455211454d2028804c508153192a8a86a4485759022cbf1d0b",
+  "total_codepoints": 5,
+  "total_glyphs": 6,
+  "weight_class": 400,
+  "width_class": 5
+ },
+ "TestOTF.otf/name/true": {
+  "axes": [],
+  "bold": false,
+  "cmap_subtables": [
+   4,
+   6
+  ],
+  "font_revision_raw": null,
+  "is_variable": false,
+  "italic": false,
+  "num_fonts_in_source": 1,
+  "panose": "2 11 6 4 4 2 7 8 1 4",
+  "source_file": "noname-TestOTF.otf",
+  "source_format": "otf",
+  "source_sha256": "c7307bab838f2b455211454d2028804c508153192a8a86a4485759022cbf1d0b",
+  "total_codepoints": 5,
+  "total_glyphs": 6,
+  "validation_issues": [
+   {
+    "category": "ots_compatibility",
+    "location": "tables.name",
+    "message": "OTS: required table 'name' is missing",
+    "severity": "error"
+   },
+   {
+    "category": "hinting",
+    "location": "cff.private_dict",
+    "message": "CFF Private DICT has no BlueValues or StdHW/StdVW \u2014 alignment zones and stem widths are the primary hinting mechanism for CFF outlines",
+    "severity": "info"
+   },
+   {
+    "category": "opentype_conformance",
+    "location": "tables.name",
+    "message": "Required table 'name' is missing for this sfnt flavor",
+    "severity": "error"
+   }
+  ],
+  "validation_summary": {
+   "error_count": 2,
+   "fatal_count": 0,
+   "info_count": 1,
+   "passed": false,
+   "total": 3,
+   "warning_count": 0
+  },
+  "weight_class": 400,
+  "width_class": 5
+ },
+ "TestOTF.otf/post/false": {
+  "axes": [],
+  "bold": false,
+  "cmap_subtables": [
+   4,
+   6
+  ],
+  "family_name": "Test OTF",
+  "font_revision_raw": 65536,
+  "full_name": "Test OTF",
+  "is_variable": false,
+  "italic": false,
+  "num_fonts_in_source": 1,
+  "panose": "2 11 6 4 4 2 7 8 1 4",
+  "postscript_name": "TestOTF-Regular",
+  "source_file": "nopost-TestOTF.otf",
+  "source_format": "otf",
+  "source_sha256": "57f7cad765327c3f2472dd23fa9be0eec3cff09a27cc8ca2a93983f13c6ae40e",
+  "subfamily_name": "Regular",
+  "total_codepoints": 5,
+  "total_glyphs": 6,
+  "version": "Version 1.000",
+  "weight_class": 400,
+  "width_class": 5
+ },
+ "TestOTF.otf/post/true": {
+  "axes": [],
+  "bold": false,
+  "cmap_subtables": [
+   4,
+   6
+  ],
+  "family_name": "Test OTF",
+  "font_revision_raw": 65536,
+  "full_name": "Test OTF",
+  "is_variable": false,
+  "italic": false,
+  "num_fonts_in_source": 1,
+  "panose": "2 11 6 4 4 2 7 8 1 4",
+  "postscript_name": "TestOTF-Regular",
+  "source_file": "nopost-TestOTF.otf",
+  "source_format": "otf",
+  "source_sha256": "57f7cad765327c3f2472dd23fa9be0eec3cff09a27cc8ca2a93983f13c6ae40e",
+  "subfamily_name": "Regular",
+  "total_codepoints": 5,
+  "total_glyphs": 6,
+  "validation_issues": [
+   {
+    "category": "ots_compatibility",
+    "location": "tables.post",
+    "message": "OTS: required table 'post' is missing",
+    "severity": "error"
+   },
+   {
+    "category": "hinting",
+    "location": "cff.private_dict",
+    "message": "CFF Private DICT has no BlueValues or StdHW/StdVW \u2014 alignment zones and stem widths are the primary hinting mechanism for CFF outlines",
+    "severity": "info"
+   },
+   {
+    "category": "opentype_conformance",
+    "location": "tables.post",
+    "message": "Required table 'post' is missing for this sfnt flavor",
+    "severity": "error"
+   },
+   {
+    "category": "naming_consistency",
+    "location": "name.consistency.full_name",
+    "message": "Full name 'Test OTF' doesn't match Family + Subfamily 'Test OTF Regular'",
+    "severity": "info"
+   }
+  ],
+  "validation_summary": {
+   "error_count": 2,
+   "fatal_count": 0,
+   "info_count": 2,
+   "passed": false,
+   "total": 4,
+   "warning_count": 0
+  },
+  "version": "Version 1.000",
+  "weight_class": 400,
+  "width_class": 5
+ },
+ "TestTTF.ttf/OS2/false": {
+  "axes": [],
+  "bold": false,
+  "cmap_subtables": [
+   4,
+   6
+  ],
+  "family_name": "Test TTF",
+  "font_revision_raw": 65536,
+  "full_name": "Test TTF",
+  "is_variable": false,
+  "italic": false,
+  "num_fonts_in_source": 1,
+  "postscript_name": "TestTTF-Regular",
+  "source_file": "noOS2-TestTTF.ttf",
+  "source_format": "ttf",
+  "source_sha256": "2b78cf0b2039207a1819fec639d631a5d3a37206f64ab9c250ecfa7fb54f39e5",
+  "subfamily_name": "Regular",
+  "total_codepoints": 5,
+  "total_glyphs": 6,
+  "version": "Version 1.000"
+ },
+ "TestTTF.ttf/OS2/true": {
+  "axes": [],
+  "bold": false,
+  "cmap_subtables": [
+   4,
+   6
+  ],
+  "family_name": "Test TTF",
+  "font_revision_raw": 65536,
+  "full_name": "Test TTF",
+  "is_variable": false,
+  "italic": false,
+  "num_fonts_in_source": 1,
+  "postscript_name": "TestTTF-Regular",
+  "source_file": "noOS2-TestTTF.ttf",
+  "source_format": "ttf",
+  "source_sha256": "2b78cf0b2039207a1819fec639d631a5d3a37206f64ab9c250ecfa7fb54f39e5",
+  "subfamily_name": "Regular",
+  "total_codepoints": 5,
+  "total_glyphs": 6,
+  "validation_issues": [
+   {
+    "category": "ots_compatibility",
+    "location": "tables.OS/2",
+    "message": "OTS: required table 'OS/2' is missing",
+    "severity": "error"
+   },
+   {
+    "category": "hinting",
+    "location": "maxp.max_stack_elements",
+    "message": "maxp.maxStackElements is 0 but the font has hinting instructions \u2014 rendering may fail",
+    "severity": "warning"
+   },
+   {
+    "category": "opentype_conformance",
+    "location": "tables.OS/2",
+    "message": "Required table 'OS/2' is missing for this sfnt flavor",
+    "severity": "error"
+   },
+   {
+    "category": "naming_consistency",
+    "location": "name.consistency.full_name",
+    "message": "Full name 'Test TTF' doesn't match Family + Subfamily 'Test TTF Regular'",
+    "severity": "info"
+   }
+  ],
+  "validation_summary": {
+   "error_count": 2,
+   "fatal_count": 0,
+   "info_count": 1,
+   "passed": false,
+   "total": 4,
+   "warning_count": 1
+  },
+  "version": "Version 1.000"
+ },
+ "TestTTF.ttf/cmap/false": {
+  "axes": [],
+  "bold": false,
+  "family_name": "Test TTF",
+  "font_revision_raw": 65536,
+  "full_name": "Test TTF",
+  "is_variable": false,
+  "italic": false,
+  "num_fonts_in_source": 1,
+  "panose": "2 11 6 4 4 2 7 8 1 4",
+  "postscript_name": "TestTTF-Regular",
+  "source_file": "nocmap-TestTTF.ttf",
+  "source_format": "ttf",
+  "source_sha256": "4f241b8cbda478d9bbb37d9c5c88d60e038aaf03d7b04e8be3cfa719f7949180",
+  "subfamily_name": "Regular",
+  "total_glyphs": 6,
+  "version": "Version 1.000",
+  "weight_class": 400,
+  "width_class": 5
+ },
+ "TestTTF.ttf/cmap/true": {
+  "axes": [],
+  "bold": false,
+  "family_name": "Test TTF",
+  "font_revision_raw": 65536,
+  "full_name": "Test TTF",
+  "is_variable": false,
+  "italic": false,
+  "num_fonts_in_source": 1,
+  "panose": "2 11 6 4 4 2 7 8 1 4",
+  "postscript_name": "TestTTF-Regular",
+  "source_file": "nocmap-TestTTF.ttf",
+  "source_format": "ttf",
+  "source_sha256": "4f241b8cbda478d9bbb37d9c5c88d60e038aaf03d7b04e8be3cfa719f7949180",
+  "subfamily_name": "Regular",
+  "total_glyphs": 6,
+  "validation_issues": [
+   {
+    "category": "ots_compatibility",
+    "location": "tables.cmap",
+    "message": "OTS: required table 'cmap' is missing",
+    "severity": "error"
+   },
+   {
+    "category": "hinting",
+    "location": "maxp.max_stack_elements",
+    "message": "maxp.maxStackElements is 0 but the font has hinting instructions \u2014 rendering may fail",
+    "severity": "warning"
+   },
+   {
+    "category": "opentype_conformance",
+    "location": "tables.cmap",
+    "message": "Required table 'cmap' is missing for this sfnt flavor",
+    "severity": "error"
+   },
+   {
+    "category": "naming_consistency",
+    "location": "name.consistency.full_name",
+    "message": "Full name 'Test TTF' doesn't match Family + Subfamily 'Test TTF Regular'",
+    "severity": "info"
+   }
+  ],
+  "validation_summary": {
+   "error_count": 2,
+   "fatal_count": 0,
+   "info_count": 1,
+   "passed": false,
+   "total": 4,
+   "warning_count": 1
+  },
+  "version": "Version 1.000",
+  "weight_class": 400,
+  "width_class": 5
+ },
+ "TestTTF.ttf/loca/false": {
+  "axes": [],
+  "bold": false,
+  "cmap_subtables": [
+   4,
+   6
+  ],
+  "family_name": "Test TTF",
+  "font_revision_raw": 65536,
+  "full_name": "Test TTF",
+  "is_variable": false,
+  "italic": false,
+  "num_fonts_in_source": 1,
+  "panose": "2 11 6 4 4 2 7 8 1 4",
+  "postscript_name": "TestTTF-Regular",
+  "source_file": "noloca-TestTTF.ttf",
+  "source_format": "ttf",
+  "source_sha256": "c13f6ebecd369183e5bfc71bc4621f02c89f417bdadc256825f6c3077289b1dd",
+  "subfamily_name": "Regular",
+  "total_codepoints": 5,
+  "total_glyphs": 6,
+  "version": "Version 1.000",
+  "weight_class": 400,
+  "width_class": 5
+ },
+ "TestTTF.ttf/loca/true": {
+  "axes": [],
+  "bold": false,
+  "cmap_subtables": [
+   4,
+   6
+  ],
+  "family_name": "Test TTF",
+  "font_revision_raw": 65536,
+  "full_name": "Test TTF",
+  "is_variable": false,
+  "italic": false,
+  "num_fonts_in_source": 1,
+  "panose": "2 11 6 4 4 2 7 8 1 4",
+  "postscript_name": "TestTTF-Regular",
+  "source_file": "noloca-TestTTF.ttf",
+  "source_format": "ttf",
+  "source_sha256": "c13f6ebecd369183e5bfc71bc4621f02c89f417bdadc256825f6c3077289b1dd",
+  "subfamily_name": "Regular",
+  "total_codepoints": 5,
+  "total_glyphs": 6,
+  "validation_issues": [
+   {
+    "category": "hinting",
+    "location": "maxp.max_stack_elements",
+    "message": "maxp.maxStackElements is 0 but the font has hinting instructions \u2014 rendering may fail",
+    "severity": "warning"
+   },
+   {
+    "category": "opentype_conformance",
+    "location": "tables.loca",
+    "message": "Required table 'loca' is missing for this sfnt flavor",
+    "severity": "error"
+   },
+   {
+    "category": "naming_consistency",
+    "location": "name.consistency.full_name",
+    "message": "Full name 'Test TTF' doesn't match Family + Subfamily 'Test TTF Regular'",
+    "severity": "info"
+   }
+  ],
+  "validation_summary": {
+   "error_count": 1,
+   "fatal_count": 0,
+   "info_count": 1,
+   "passed": false,
+   "total": 3,
+   "warning_count": 1
+  },
+  "version": "Version 1.000",
+  "weight_class": 400,
+  "width_class": 5
+ },
+ "TestTTF.ttf/maxp/false": {
+  "axes": [],
+  "bold": false,
+  "cmap_subtables": [
+   4,
+   6
+  ],
+  "family_name": "Test TTF",
+  "font_revision_raw": 65536,
+  "full_name": "Test TTF",
+  "is_variable": false,
+  "italic": false,
+  "num_fonts_in_source": 1,
+  "panose": "2 11 6 4 4 2 7 8 1 4",
+  "postscript_name": "TestTTF-Regular",
+  "source_file": "nomaxp-TestTTF.ttf",
+  "source_format": "ttf",
+  "source_sha256": "b911cd5e0179df5de4e9a8319c9d7b197562b5c50e82466ed018efc0e8a4ebe7",
+  "subfamily_name": "Regular",
+  "total_codepoints": 5,
+  "total_glyphs": 0,
+  "version": "Version 1.000",
+  "weight_class": 400,
+  "width_class": 5
+ },
+ "TestTTF.ttf/maxp/true": {
+  "axes": [],
+  "bold": false,
+  "cmap_subtables": [
+   4,
+   6
+  ],
+  "family_name": "Test TTF",
+  "font_revision_raw": 65536,
+  "full_name": "Test TTF",
+  "is_variable": false,
+  "italic": false,
+  "num_fonts_in_source": 1,
+  "panose": "2 11 6 4 4 2 7 8 1 4",
+  "postscript_name": "TestTTF-Regular",
+  "source_file": "nomaxp-TestTTF.ttf",
+  "source_format": "ttf",
+  "source_sha256": "b911cd5e0179df5de4e9a8319c9d7b197562b5c50e82466ed018efc0e8a4ebe7",
+  "subfamily_name": "Regular",
+  "total_codepoints": 5,
+  "total_glyphs": 0,
+  "validation_issues": [
+   {
+    "category": "ots_compatibility",
+    "location": "tables.maxp",
+    "message": "OTS: required table 'maxp' is missing",
+    "severity": "error"
+   },
+   {
+    "category": "hinting",
+    "message": "Check hinting failed to execute: NoMethodError: undefined method 'version_1_0?' for nil",
+    "severity": "fatal"
+   },
+   {
+    "category": "opentype_conformance",
+    "location": "tables.maxp",
+    "message": "Required table 'maxp' is missing for this sfnt flavor",
+    "severity": "error"
+   },
+   {
+    "category": "naming_consistency",
+    "location": "name.consistency.full_name",
+    "message": "Full name 'Test TTF' doesn't match Family + Subfamily 'Test TTF Regular'",
+    "severity": "info"
+   }
+  ],
+  "validation_summary": {
+   "error_count": 2,
+   "fatal_count": 1,
+   "info_count": 1,
+   "passed": false,
+   "total": 4,
+   "warning_count": 0
+  },
+  "version": "Version 1.000",
+  "weight_class": 400,
+  "width_class": 5
+ },
+ "TestTTF.ttf/name/false": {
+  "axes": [],
+  "bold": false,
+  "cmap_subtables": [
+   4,
+   6
+  ],
+  "font_revision_raw": null,
+  "is_variable": false,
+  "italic": false,
+  "num_fonts_in_source": 1,
+  "panose": "2 11 6 4 4 2 7 8 1 4",
+  "source_file": "noname-TestTTF.ttf",
+  "source_format": "ttf",
+  "source_sha256": "cf8a26e5fcf5156ff30c81f75679255549c1466a635d43fa984407249aa7b42a",
+  "total_codepoints": 5,
+  "total_glyphs": 6,
+  "weight_class": 400,
+  "width_class": 5
+ },
+ "TestTTF.ttf/name/true": {
+  "axes": [],
+  "bold": false,
+  "cmap_subtables": [
+   4,
+   6
+  ],
+  "font_revision_raw": null,
+  "is_variable": false,
+  "italic": false,
+  "num_fonts_in_source": 1,
+  "panose": "2 11 6 4 4 2 7 8 1 4",
+  "source_file": "noname-TestTTF.ttf",
+  "source_format": "ttf",
+  "source_sha256": "cf8a26e5fcf5156ff30c81f75679255549c1466a635d43fa984407249aa7b42a",
+  "total_codepoints": 5,
+  "total_glyphs": 6,
+  "validation_issues": [
+   {
+    "category": "ots_compatibility",
+    "location": "tables.name",
+    "message": "OTS: required table 'name' is missing",
+    "severity": "error"
+   },
+   {
+    "category": "hinting",
+    "location": "maxp.max_stack_elements",
+    "message": "maxp.maxStackElements is 0 but the font has hinting instructions \u2014 rendering may fail",
+    "severity": "warning"
+   },
+   {
+    "category": "opentype_conformance",
+    "location": "tables.name",
+    "message": "Required table 'name' is missing for this sfnt flavor",
+    "severity": "error"
+   }
+  ],
+  "validation_summary": {
+   "error_count": 2,
+   "fatal_count": 0,
+   "info_count": 0,
+   "passed": false,
+   "total": 3,
+   "warning_count": 1
+  },
+  "weight_class": 400,
+  "width_class": 5
+ },
+ "TestTTF.ttf/post/false": {
+  "axes": [],
+  "bold": false,
+  "cmap_subtables": [
+   4,
+   6
+  ],
+  "family_name": "Test TTF",
+  "font_revision_raw": 65536,
+  "full_name": "Test TTF",
+  "is_variable": false,
+  "italic": false,
+  "num_fonts_in_source": 1,
+  "panose": "2 11 6 4 4 2 7 8 1 4",
+  "postscript_name": "TestTTF-Regular",
+  "source_file": "nopost-TestTTF.ttf",
+  "source_format": "ttf",
+  "source_sha256": "682e886ba807495d9f09458866e4589749075c85a71e0ef2f2c4db9dce0d8e88",
+  "subfamily_name": "Regular",
+  "total_codepoints": 5,
+  "total_glyphs": 6,
+  "version": "Version 1.000",
+  "weight_class": 400,
+  "width_class": 5
+ },
+ "TestTTF.ttf/post/true": {
+  "axes": [],
+  "bold": false,
+  "cmap_subtables": [
+   4,
+   6
+  ],
+  "family_name": "Test TTF",
+  "font_revision_raw": 65536,
+  "full_name": "Test TTF",
+  "is_variable": false,
+  "italic": false,
+  "num_fonts_in_source": 1,
+  "panose": "2 11 6 4 4 2 7 8 1 4",
+  "postscript_name": "TestTTF-Regular",
+  "source_file": "nopost-TestTTF.ttf",
+  "source_format": "ttf",
+  "source_sha256": "682e886ba807495d9f09458866e4589749075c85a71e0ef2f2c4db9dce0d8e88",
+  "subfamily_name": "Regular",
+  "total_codepoints": 5,
+  "total_glyphs": 6,
+  "validation_issues": [
+   {
+    "category": "ots_compatibility",
+    "location": "tables.post",
+    "message": "OTS: required table 'post' is missing",
+    "severity": "error"
+   },
+   {
+    "category": "hinting",
+    "location": "maxp.max_stack_elements",
+    "message": "maxp.maxStackElements is 0 but the font has hinting instructions \u2014 rendering may fail",
+    "severity": "warning"
+   },
+   {
+    "category": "opentype_conformance",
+    "location": "tables.post",
+    "message": "Required table 'post' is missing for this sfnt flavor",
+    "severity": "error"
+   },
+   {
+    "category": "naming_consistency",
+    "location": "name.consistency.full_name",
+    "message": "Full name 'Test TTF' doesn't match Family + Subfamily 'Test TTF Regular'",
+    "severity": "info"
+   }
+  ],
+  "validation_summary": {
+   "error_count": 2,
+   "fatal_count": 0,
+   "info_count": 1,
+   "passed": false,
+   "total": 4,
+   "warning_count": 1
+  },
+  "version": "Version 1.000",
+  "weight_class": 400,
+  "width_class": 5
+ }
+}

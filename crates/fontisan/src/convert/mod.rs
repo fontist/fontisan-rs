@@ -130,33 +130,39 @@ fn require_core_tables(tables: &Tables) -> Result<(), ConvertError> {
     Ok(())
 }
 
-/// Ruby's output validation of a CFF -> TrueType result when a required table
-/// is absent from the source. Ruby's wording repeats the "is missing" clause once
-/// per failing check; the text below is its measured output for a single missing table.
-fn validate_ttf_output(ttf: &Tables) -> Result<(), ConvertError> {
-    const MISSING: [(&[u8; 4], &str); 4] = [
-        (b"post", "Required table 'post' is missing"),
-        (
-            b"name",
-            "Font structure validation failed for check 'required_tables', Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing",
-        ),
-        (
-            b"OS/2",
-            "Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing",
-        ),
-        (
-            b"cmap",
-            "Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing, Exception during check execution: NoMethodError - undefined method 'valid_glyph_indices?' for nil",
-        ),
-    ];
-    for (tag, msg) in MISSING {
-        if !has(ttf, tag) {
+const POST_MSG: &str = "Required table 'post' is missing";
+const NAME_MSG: &str = "Font structure validation failed for check 'required_tables', Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing";
+const OS2_MSG: &str = "Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing";
+const CMAP_MSG: &str = "Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing, Exception during check execution: NoMethodError - undefined method 'valid_glyph_indices?' for nil";
+
+/// Ruby's output validation when a required table is absent from the source.
+/// Ruby repeats a clause once per failing check; the texts above are its
+/// measured output for a single missing table, so they are keyed per table.
+fn validate_output_tables(
+    tables: &Tables,
+    checks: &[(&[u8; 4], &str)],
+) -> Result<(), ConvertError> {
+    for (tag, msg) in checks {
+        if !has(tables, tag) {
             return Err(ConvertError::transform(format!(
                 "Output validation failed: {msg}"
             )));
         }
     }
     Ok(())
+}
+
+/// A CFF -> TrueType result (Ruby's `Output validation failed`).
+fn validate_ttf_output(ttf: &Tables) -> Result<(), ConvertError> {
+    validate_output_tables(
+        ttf,
+        &[
+            (b"post", POST_MSG),
+            (b"name", NAME_MSG),
+            (b"OS/2", OS2_MSG),
+            (b"cmap", CMAP_MSG),
+        ],
+    )
 }
 
 /// `Fontisan.convert(input, to: target)` for static fonts. `timestamp` is
@@ -223,7 +229,22 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
             let want_glyf = target == Target::Ttf;
             if has(&tables, b"glyf") && !want_glyf {
                 // 1h-t2o: glyf -> CFF outline conversion.
+                if !has(&tables, b"loca") {
+                    return Err(ConvertError::transform(
+                        "TrueType font missing required glyf or loca table",
+                    ));
+                }
                 require_core_tables(&tables)?;
+                if !has(&tables, b"name") {
+                    // Ruby fails while writing the rebuilt font (its own bug, verbatim).
+                    return Err(ConvertError::transform(
+                        "item 0 must have BINARY encoding, got: UTF-8",
+                    ));
+                }
+                validate_output_tables(
+                    &tables,
+                    &[(b"post", POST_MSG), (b"OS/2", OS2_MSG), (b"cmap", CMAP_MSG)],
+                )?;
                 let converted = outline_t2o::convert_ttf_to_otf(&tables)?;
                 let out = write_font(&converted, 0x4F54_544F);
                 outline_t2o::validate_output(&converted)?;
