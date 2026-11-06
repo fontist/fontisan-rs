@@ -291,6 +291,11 @@ fn expand_deltas(t: &Tuple, outline: &Outline, orig: &[(f64, f64)]) -> (Vec<f64>
 fn iup(coords: &[f64], deltas: &mut [Option<f64>], ends: &[usize]) {
     let mut start = 0usize;
     for &last in ends {
+        // A malformed contour end can point past the glyph's points; stop there
+        // instead of indexing out of bounds.
+        if last >= deltas.len() || last >= coords.len() || start > last {
+            break;
+        }
         let touched: Vec<usize> = (start..=last).filter(|&i| deltas[i].is_some()).collect();
         if touched.is_empty() {
             (start..=last).for_each(|i| deltas[i] = Some(0.0));
@@ -593,6 +598,16 @@ fn format_value(v: f64) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn iup_with_a_contour_end_past_the_points_does_not_panic() {
+        let coords = [0.0, 10.0, 20.0];
+        let mut deltas = [Some(1.0), None, None];
+        iup(&coords, &mut deltas, &[1, 26]);
+        assert_eq!(deltas[1], Some(1.0));
+        assert_eq!(deltas[2], None);
+    }
+
     use super::*;
 
     fn tables(tags: &[&[u8; 4]]) -> Tables {
