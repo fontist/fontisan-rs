@@ -20,6 +20,19 @@ fn sha_hex(bytes: &[u8]) -> String {
         })
 }
 
+/// Digest of the whole file. Hashing the file is the costly step of `read` on a
+/// large collection, so it runs once per file, never once per face.
+fn file_digest(bytes: &[u8]) -> String {
+    #[cfg(test)]
+    FILE_HASHES.with(|c| c.set(c.get() + 1));
+    sha_hex(bytes)
+}
+
+#[cfg(test)]
+thread_local! {
+    static FILE_HASHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// `{class, message, causes: [{class, message}]}`: the error surface the 0e
 /// malformed goldens record (`error_class` is `class` here).
 pub fn error_json(e: &Error) -> Json {
@@ -178,6 +191,12 @@ fn fvar(f: &Font) -> Json {
 
 /// One face of `bytes` as the facade's read entry, or the first error `read` raises.
 pub fn read_face(bytes: &[u8], font: &Font, index: usize) -> Result<Json, Error> {
+    read_face_hashed(&file_digest(bytes), font, index)
+}
+
+/// [`read_face`] with the whole-file digest supplied, so a collection hashes the
+/// file once rather than once per face.
+fn read_face_hashed(file_sha256: &str, font: &Font, index: usize) -> Result<Json, Error> {
     let tables: Vec<Json> = font
         .table_summaries()
         .into_iter()
@@ -239,7 +258,7 @@ pub fn read_face(bytes: &[u8], font: &Font, index: usize) -> Result<Json, Error>
     }
     Ok(obj! {
         "format" => font.format().as_str(),
-        "file_sha256" => sha_hex(bytes),
+        "file_sha256" => file_sha256,
         "index" => index,
         "mode" => font.mode().as_str(),
         "lazy" => font.lazy(),
@@ -259,10 +278,47 @@ pub fn read_face(bytes: &[u8], font: &Font, index: usize) -> Result<Json, Error>
 /// member), or the first error.
 pub fn read(bytes: &[u8], options: Options) -> Result<Vec<Json>, Error> {
     let faces = face_count(bytes).unwrap_or(1);
+    let file_sha256 = file_digest(bytes);
     (0..faces)
         .map(|i| {
             let font = Font::load(bytes, i, options)?;
-            read_face(bytes, &font, i)
+            read_face_hashed(&file_sha256, &font, i)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `faces` empty-directory sfnt faces in one collection.
+    fn collection(faces: u32) -> Vec<u8> {
+        let header = 12 + 4 * faces as usize;
+        let mut b = b"ttcf\0\x01\0\0".to_vec();
+        b.extend_from_slice(&faces.to_be_bytes());
+        for i in 0..faces {
+            b.extend_from_slice(&((header + 12 * i as usize) as u32).to_be_bytes());
+        }
+        for _ in 0..faces {
+            b.extend_from_slice(&[0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        }
+        b
+    }
+
+    #[test]
+    fn a_collection_hashes_the_whole_file_once_and_every_face_carries_it() {
+        let bytes = collection(3);
+        FILE_HASHES.with(|c| c.set(0));
+        let faces = read(&bytes, Options::default()).expect("read");
+        assert_eq!(faces.len(), 3);
+        assert_eq!(FILE_HASHES.with(|c| c.get()), 1, "file hashed per face");
+        let want = sha_hex(&bytes);
+        for face in &faces {
+            let Json::Obj(m) = face else {
+                panic!("not an object")
+            };
+            let got = m.iter().find(|(k, _)| *k == "file_sha256").map(|(_, v)| v);
+            assert!(matches!(got, Some(Json::Str(s)) if *s == want), "{got:?}");
+        }
+    }
 }
