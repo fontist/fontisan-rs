@@ -106,7 +106,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: fuzz
-      - run: cargo install cargo-fuzz --version 0.13.1 --locked
+      - run: cargo install cargo-fuzz --version 0.13.2 --locked
       - run: cargo xtask corpus-fetch
       - name: seed corpus (committed seeds + small corpus fonts)
         run: |
