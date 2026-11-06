@@ -17,7 +17,7 @@ mod glyf;
 use std::collections::BTreeSet;
 use std::fmt;
 
-use crate::convert::{Tables, tables_of, write_font};
+use crate::convert::{Tables, tables_of_lenient, write_font};
 use crate::sfnt::{self, Format};
 
 pub use crate::convert::UNSUPPORTED_CLASS;
@@ -108,7 +108,8 @@ impl Mapping {
 /// font file bytes (face 0; woff and woff2 are decoded first).
 pub fn subset(input: &[u8], glyph_ids: &[u32], profile: &str) -> Result<Vec<u8>, SubsetError> {
     let raw = decode(input)?;
-    let (_version, tables) = tables_of(&raw).map_err(|e| SubsetError::new(e.class, e.message))?;
+    let (_version, tables) =
+        tables_of_lenient(&raw).map_err(|e| SubsetError::new(e.class, e.message))?;
     build(&tables, glyph_ids, profile)
 }
 
@@ -154,7 +155,7 @@ fn build(tables: &Tables, glyph_ids: &[u32], profile: &str) -> Result<Vec<u8>, S
     if glyph_ids.is_empty() {
         return Err(SubsetError::arg("At least one glyph ID must be provided"));
     }
-    for tag in ["head", "maxp"] {
+    for tag in ["head", "hhea", "maxp"] {
         if find(tables, tag).is_none() {
             return Err(SubsetError::new(
                 "Fontisan::MissingTableError",
@@ -279,12 +280,12 @@ pub fn glyph_ids_for(
 ) -> Result<Vec<u32>, SubsetError> {
     let font = sfnt::Font::from_bytes(input)
         .map_err(|e| SubsetError::new("Fontisan::Error", e.to_string()))?;
-    // Ruby calls `unicode_mappings` on the cmap table: nil when it is absent.
+    // Ruby's `gids_for` raises MissingTableError for an absent cmap (reference.rb).
     let map: std::collections::BTreeMap<u32, u32> = match font.cmap() {
         Ok(None) => {
             return Err(SubsetError::new(
-                "NoMethodError",
-                "undefined method 'unicode_mappings' for nil",
+                "Fontisan::MissingTableError",
+                "Required table 'cmap' not found in font",
             ));
         }
         Ok(Some(c)) => c.mappings().into_iter().collect(),
@@ -306,6 +307,7 @@ pub fn glyph_ids_for(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::convert::tables_of;
 
     fn head() -> Vec<u8> {
         vec![0; 54]
@@ -325,7 +327,7 @@ mod tests {
     }
 
     #[test]
-    fn missing_hhea_reports_ruby_nil_method_error() {
+    fn missing_hhea_reports_missing_table_error() {
         let f = font(&[
             (b"head", head()),
             (b"maxp", maxp()),
@@ -334,27 +336,29 @@ mod tests {
             (b"loca", vec![0; 4]),
         ]);
         let (class, msg) = err(subset(&f, &[0], "web"));
-        assert_eq!(class, "Fontisan::SubsettingError");
-        assert_eq!(
-            msg,
-            "Failed to subset table 'hmtx': undefined method 'number_of_h_metrics' for nil"
-        );
+        assert_eq!(class, "Fontisan::MissingTableError");
+        assert_eq!(msg, "Required table 'hhea' not found in font");
     }
 
     #[test]
     fn missing_loca_reports_required_table() {
-        let f = font(&[(b"head", head()), (b"maxp", maxp()), (b"glyf", vec![])]);
+        let f = font(&[
+            (b"head", head()),
+            (b"maxp", maxp()),
+            (b"hhea", vec![0; 36]),
+            (b"glyf", vec![]),
+        ]);
         let (class, msg) = err(subset(&f, &[0], "web"));
         assert_eq!(class, "Fontisan::MissingTableError");
         assert_eq!(msg, "Required table 'loca' not found in font");
     }
 
     #[test]
-    fn missing_cmap_reports_ruby_nil_method_error() {
+    fn missing_cmap_reports_missing_table_error() {
         let f = font(&[(b"head", head()), (b"maxp", maxp())]);
         let e = glyph_ids_for(&f, &[97], "x.ttf").expect_err("no cmap");
-        assert_eq!(e.class, "NoMethodError");
-        assert_eq!(e.message, "undefined method 'unicode_mappings' for nil");
+        assert_eq!(e.class, "Fontisan::MissingTableError");
+        assert_eq!(e.message, "Required table 'cmap' not found in font");
     }
 
     fn simple_font(glyph: Vec<u8>, loca_end_halves: u16) -> Vec<u8> {
@@ -426,7 +430,11 @@ mod tests {
         f[z + 8..z + 12].copy_from_slice(&(end + 100).to_be_bytes());
         let hm = dir_entry(&f, b"hmtx");
         f[hm + 12..hm + 16].copy_from_slice(&u32::MAX.to_be_bytes());
-        let (_, got) = tables_of(&f).unwrap();
+        assert!(
+            tables_of(&f).is_err(),
+            "convert/instance readers stay strict"
+        );
+        let (_, got) = tables_of_lenient(&f).unwrap();
         assert!(
             !got.iter().any(|(t, _)| t == b"zzzz"),
             "offset past EOF is absent"

@@ -90,7 +90,21 @@ impl Target {
 /// position and its last data, like a Ruby hash).
 pub(crate) type Tables = Vec<([u8; 4], Vec<u8>)>;
 
+/// Strict directory read, as Ruby's convert, instance, audit and read paths behave:
+/// a table running past the end of the file rejects the font.
 pub(crate) fn tables_of(sfnt: &[u8]) -> Result<(u32, Tables), ConvertError> {
+    tables_of_with(sfnt, false)
+}
+
+/// Lenient directory read, as Ruby's subsetter loads a font: each table is read with
+/// `io.seek(off); io.read(len)`, so a length past the end of the file is clamped and a
+/// non-empty read at or past the end is nil (an absent table). Only the subset path
+/// tolerates this; every other Ruby reader raises.
+pub(crate) fn tables_of_lenient(sfnt: &[u8]) -> Result<(u32, Tables), ConvertError> {
+    tables_of_with(sfnt, true)
+}
+
+fn tables_of_with(sfnt: &[u8], lenient: bool) -> Result<(u32, Tables), ConvertError> {
     let bad = || ConvertError::transform("invalid sfnt table directory");
     let hdr = sfnt.get(..12).ok_or_else(bad)?;
     let version = u32::from_be_bytes([hdr[0], hdr[1], hdr[2], hdr[3]]);
@@ -101,14 +115,15 @@ pub(crate) fn tables_of(sfnt: &[u8]) -> Result<(u32, Tables), ConvertError> {
         let tag = [e[0], e[1], e[2], e[3]];
         let off = u32::from_be_bytes([e[8], e[9], e[10], e[11]]) as usize;
         let len = u32::from_be_bytes([e[12], e[13], e[14], e[15]]) as usize;
-        // Ruby reads each table with `io.seek(off); io.read(len)`: a length that runs
-        // past the end of the file is clamped, and a non-empty read at or past the end
-        // gives nil, which the subsetter and converter treat as an absent table. A
-        // short or missing table never rejects the file.
-        let data = if len > 0 && off >= sfnt.len() {
-            None
+        let data = if lenient {
+            if len > 0 && off >= sfnt.len() {
+                None
+            } else {
+                Some(sfnt[off.min(sfnt.len())..off.saturating_add(len).min(sfnt.len())].to_vec())
+            }
         } else {
-            Some(sfnt[off.min(sfnt.len())..off.saturating_add(len).min(sfnt.len())].to_vec())
+            let end = off.checked_add(len).ok_or_else(bad)?;
+            Some(sfnt.get(off..end).ok_or_else(bad)?.to_vec())
         };
         match (out.iter().position(|(t, _)| *t == tag), data) {
             (Some(i), Some(d)) => out[i].1 = d,
