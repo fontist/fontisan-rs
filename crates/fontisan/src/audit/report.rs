@@ -218,10 +218,12 @@ pub fn build_report(
             face.gpos()?
         };
         if let Some(t) = table {
-            let s = t.scripts();
-            scripts.extend(s.iter().copied());
-            for script in &s {
-                features.extend(t.features(script));
+            // Parsed once and budgeted (as in `read`); `features(script)` per
+            // script re-parsed both lists each time and took seconds on a
+            // 137 KB table.
+            for (script, fs) in t.script_features() {
+                scripts.insert(script);
+                features.extend(fs);
             }
         }
     }
