@@ -4,7 +4,6 @@
 //! selection is Ruby's own, not skrifa's `Charmap` (docs/substrate.md, 1b).
 use super::cursor::Cursor;
 use super::error::Error;
-use std::collections::BTreeMap;
 
 const MAX_CODEPOINT: u32 = 0x10_FFFF;
 
@@ -35,7 +34,7 @@ fn be32(d: &[u8], o: usize) -> Option<u32> {
 /// four segment arrays, a subtable declaring more than the cmap holds is dropped, and
 /// a segment whose arrays were cut short by that bound is skipped (Ruby raises
 /// NoMethodError there; the fix makes it a skip on both tiers).
-fn format4(d: &[u8], m: &mut BTreeMap<u32, u32>) {
+fn format4(d: &[u8], m: &mut Vec<(u32, u32)>) {
     if d.len() < 14 {
         return;
     }
@@ -67,8 +66,26 @@ fn format4(d: &[u8], m: &mut BTreeMap<u32, u32>) {
     // table is never stored, so it does not claim; for a range-offset segment the
     // glyph array only gets further out as the code grows, so the first code past
     // `length` ends that segment.
-    let mut next: Vec<u32> = (0..=0x1_0000).collect();
-    for i in (0..seg_count).rev() {
+    let usable = |i: usize| match (starts.get(i), ends.get(i), deltas.get(i), ranges.get(i)) {
+        (Some(&s), Some(&e), Some(_), Some(_)) if s != 0xFFFF && s <= e => Some((s, e)),
+        _ => None,
+    };
+    let mut prev_end: Option<u16> = None;
+    let mut disjoint = true;
+    for (s, e) in (0..seg_count).filter_map(usable) {
+        if prev_end.is_some_and(|p| s <= p) {
+            disjoint = false;
+            break;
+        }
+        prev_end = Some(e);
+    }
+    let mut claims = Claims::new(disjoint, 0x1_0000);
+    let order: Box<dyn Iterator<Item = usize>> = if disjoint {
+        Box::new(0..seg_count)
+    } else {
+        Box::new((0..seg_count).rev())
+    };
+    for i in order {
         let (Some(&start), Some(&end), Some(&delta), Some(&range)) =
             (starts.get(i), ends.get(i), deltas.get(i), ranges.get(i))
         else {
@@ -79,7 +96,7 @@ fn format4(d: &[u8], m: &mut BTreeMap<u32, u32>) {
         }
         let mut code = start as u32;
         while code <= end as u32 {
-            let c = find(&mut next, code);
+            let c = claims.find(code);
             if c > end as u32 {
                 break;
             }
@@ -100,18 +117,19 @@ fn format4(d: &[u8], m: &mut BTreeMap<u32, u32>) {
                 }
             };
             if glyph != 0 {
-                m.insert(c, glyph as u32);
-                next[c as usize] = c + 1;
+                m.push((c, glyph as u32));
+                claims.claim(c);
             }
             code = c + 1;
         }
     }
+    claims.finish(m);
 }
 
 /// Ruby's `parse_format_12`: a declared `length` past the cmap drops the subtable,
 /// groups are read while they fit in `length`, and a group's end is clamped to
 /// U+10FFFF.
-fn format12(d: &[u8], m: &mut BTreeMap<u32, u32>) {
+fn format12(d: &[u8], m: &mut Vec<(u32, u32)>) {
     if d.len() < 16 {
         return;
     }
@@ -141,27 +159,81 @@ fn format12(d: &[u8], m: &mut BTreeMap<u32, u32>) {
         spans.push((start, end.min(MAX_CODEPOINT), gid));
         off += 12;
     }
-    let mut next: Vec<u32> = Vec::new();
-    for &(start, end, gid) in spans.iter().rev() {
+    let mut prev_end: Option<u32> = None;
+    let mut disjoint = true;
+    for &(start, end, _) in spans.iter().filter(|s| s.0 <= s.1) {
+        if prev_end.is_some_and(|p| start <= p) {
+            disjoint = false;
+            break;
+        }
+        prev_end = Some(end);
+    }
+    let mut claims = if spans.iter().any(|s| s.0 <= s.1) {
+        Claims::new(disjoint, MAX_CODEPOINT + 1)
+    } else {
+        Claims::Disjoint
+    };
+    let order: Box<dyn Iterator<Item = &(u32, u32, u32)>> = if disjoint {
+        Box::new(spans.iter())
+    } else {
+        Box::new(spans.iter().rev())
+    };
+    for &(start, end, gid) in order {
         if start > end {
             continue;
-        }
-        if next.is_empty() {
-            next = (0..=MAX_CODEPOINT + 1).collect();
         }
         // Glyph 0 is never stored, so it must not claim its code for earlier groups.
         let mut code = if gid == 0 { start + 1 } else { start };
         while code <= end {
-            let c = find(&mut next, code);
+            let c = claims.find(code);
             if c > end {
                 break;
             }
-            m.insert(
+            m.push((
                 c,
                 (gid as u64 + (c - start) as u64).min(u32::MAX as u64) as u32,
-            );
-            next[c as usize] = c + 1;
+            ));
+            claims.claim(c);
             code = c + 1;
+        }
+    }
+    claims.finish(m);
+}
+
+/// Codes already claimed by a later segment or group. Ordinary fonts list their
+/// segments ascending and disjoint; then nothing can be overwritten, so no claim
+/// table is allocated (it is 4.4 MB for format 12) and the walk goes forward.
+enum Claims {
+    Disjoint,
+    Overlap(Vec<u32>),
+}
+
+impl Claims {
+    fn new(disjoint: bool, size: u32) -> Self {
+        if disjoint {
+            Claims::Disjoint
+        } else {
+            Claims::Overlap((0..=size).collect())
+        }
+    }
+
+    fn find(&mut self, x: u32) -> u32 {
+        match self {
+            Claims::Disjoint => x,
+            Claims::Overlap(next) => find(next, x),
+        }
+    }
+
+    fn claim(&mut self, c: u32) {
+        if let Claims::Overlap(next) = self {
+            next[c as usize] = c + 1;
+        }
+    }
+
+    /// Restore ascending code order after a last-to-first walk.
+    fn finish(&self, m: &mut [(u32, u32)]) {
+        if matches!(self, Claims::Overlap(_)) {
+            m.sort_unstable_by_key(|&(c, _)| c);
         }
     }
 }
@@ -248,13 +320,13 @@ impl Cmap {
         else {
             return Vec::new();
         };
-        let mut m: BTreeMap<u32, u32> = BTreeMap::new();
+        let mut m: Vec<(u32, u32)> = Vec::new();
         match sub.get(0..2).map(|b| u16::from_be_bytes([b[0], b[1]])) {
             Some(4) => format4(sub, &mut m),
             Some(12) => format12(sub, &mut m),
             _ => {}
         }
-        m.into_iter().collect()
+        m
     }
 }
 
@@ -301,6 +373,26 @@ mod tests {
         assert_eq!(m.len(), 0x11_0000);
         assert_eq!(m[0], (0, groups));
         assert_eq!(m[0x10_FFFF], (0x10_FFFF, groups + 0x10_FFFF));
+    }
+
+    /// Disjoint groups listed out of order take the claim table and still come out
+    /// ascending; disjoint ascending groups skip it and agree.
+    #[test]
+    fn format_12_disjoint_groups_sort_by_code_either_way() {
+        let build = |groups: &[[u32; 3]]| {
+            let mut raw = vec![0, 0, 0, 1, 0, 3, 0, 10, 0, 0, 0, 12];
+            raw.extend_from_slice(&[0, 12, 0, 0]);
+            raw.extend_from_slice(&(16 + 12 * groups.len() as u32).to_be_bytes());
+            raw.extend_from_slice(&0u32.to_be_bytes());
+            raw.extend_from_slice(&(groups.len() as u32).to_be_bytes());
+            for v in groups.iter().flatten() {
+                raw.extend_from_slice(&v.to_be_bytes());
+            }
+            Cmap::parse(&raw).unwrap().mappings()
+        };
+        let want = vec![(1, 11), (2, 12), (20, 4), (21, 5), (22, 6)];
+        assert_eq!(build(&[[1, 2, 11], [20, 22, 4]]), want);
+        assert_eq!(build(&[[20, 22, 4], [1, 2, 11]]), want);
     }
 
     /// A glyph-0 code in a later group leaves the earlier group's mapping in place.
