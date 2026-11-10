@@ -156,6 +156,13 @@ fn build(tables: &Tables, glyph_ids: &[u32], profile: &str) -> Result<Vec<u8>, S
         return Err(SubsetError::arg("At least one glyph ID must be provided"));
     }
     for tag in ["head", "hhea", "maxp"] {
+        // Ruby's `font.table(tag)` parses the table, so a head shorter than its 54
+        // bytes raises BinData's EOFError / IOError here, before anything is built.
+        if tag == "head" {
+            if let Some(Err(e)) = find(tables, tag).map(sfnt::Head::parse) {
+                return Err(SubsetError::new(e.class.ruby_name(), e.message));
+            }
+        }
         if find(tables, tag).is_none() {
             return Err(SubsetError::new(
                 "Fontisan::MissingTableError",
@@ -414,6 +421,36 @@ mod tests {
             .map(|i| 12 + 16 * i)
             .find(|&p| &f[p..p + 4] == tag)
             .unwrap()
+    }
+
+    /// A CFF-flavoured font whose `head` is `head_len` bytes (a table clamped short by
+    /// end of file reaches the builder like this). The CFF table is never reached.
+    fn font_with_short_head(head_len: usize) -> Vec<u8> {
+        font(&[
+            (b"CFF ", vec![0; 4]),
+            (b"head", vec![0; head_len]),
+            (b"hhea", vec![0; 36]),
+            (b"maxp", maxp()),
+        ])
+    }
+
+    #[test]
+    fn short_head_raises_bindata_error_like_ruby_instead_of_panicking() {
+        // Ruby (`Subset::Builder#validate_required_tables!` -> `font.table("head")`)
+        // parses head field by field: no bytes left at a field is EOFError, some
+        // bytes left is IOError. Measured with Builder.new(font, [1], web).build on
+        // SourceSans3-Regular.otf with head cut to each length: 53 and 11 IOError
+        // "data truncated"; 52, 12 and 4 EOFError "End of file reached".
+        for (len, class, message) in [
+            (4, "EOFError", "End of file reached"),
+            (11, "IOError", "data truncated"),
+            (12, "EOFError", "End of file reached"),
+            (52, "EOFError", "End of file reached"),
+            (53, "IOError", "data truncated"),
+        ] {
+            let got = err(subset(&font_with_short_head(len), &[0], "web"));
+            assert_eq!(got, (class.to_string(), message.to_string()), "head {len}");
+        }
     }
 
     #[test]
