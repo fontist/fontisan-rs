@@ -217,6 +217,56 @@ fn fvar(f: &Font) -> Json {
     }
 }
 
+/// Digest of the decoded per-glyph horizontal metrics, as the facade's
+/// `hmtx_metrics`: SHA-256 over every glyph's advance (u32 BE) then lsb (i32 BE).
+/// `null` when `hmtx`/`hhea`/`maxp` is absent or gated out by the mode, `{error}`
+/// when decoding fails (numberOfHMetrics 0 or above numGlyphs, short table).
+fn hmtx_metrics(font: &Font) -> Json {
+    fn err(e: &Error) -> Json {
+        obj! {"error" => e.class.ruby_name()}
+    }
+    let hmtx = match font.available("hmtx") {
+        Ok(Some(Some(d))) => d,
+        Ok(_) | Err(_) => return Json::Null,
+    };
+    let (hhea, maxp) = match (gated(font.hhea()), gated(font.maxp())) {
+        (Err(e), _) | (_, Err(e)) => return err(&e),
+        (Ok(Some(h)), Ok(Some(m))) => (h, m),
+        _ => return Json::Null,
+    };
+    let (nhm, glyphs) = (
+        usize::from(hhea.number_of_h_metrics),
+        usize::from(maxp.num_glyphs),
+    );
+    if nhm < 1 || glyphs < 1 || nhm > glyphs {
+        return err(&Error::new(
+            ErrorClass::Argument,
+            "invalid hmtx context".to_string(),
+        ));
+    }
+    let need = nhm * 4 + (glyphs - nhm) * 2;
+    if hmtx.len() < need {
+        return err(&Error::new(
+            ErrorClass::CorruptedTable,
+            "short hmtx".to_string(),
+        ));
+    }
+    let mut packed = Vec::with_capacity(glyphs * 8);
+    let mut advance = 0u32;
+    for gid in 0..glyphs {
+        let lsb = if gid < nhm {
+            advance = u32::from(u16::from_be_bytes([hmtx[gid * 4], hmtx[gid * 4 + 1]]));
+            i16::from_be_bytes([hmtx[gid * 4 + 2], hmtx[gid * 4 + 3]])
+        } else {
+            let o = nhm * 4 + (gid - nhm) * 2;
+            i16::from_be_bytes([hmtx[o], hmtx[o + 1]])
+        };
+        packed.extend_from_slice(&advance.to_be_bytes());
+        packed.extend_from_slice(&i32::from(lsb).to_be_bytes());
+    }
+    obj! {"count" => glyphs, "sha256" => sha_hex(&packed)}
+}
+
 /// One face of `bytes` as the facade's read entry, or the first error `read` raises.
 pub fn read_face(bytes: &[u8], font: &Font, index: usize) -> Result<Json, Error> {
     read_face_hashed(
@@ -278,8 +328,8 @@ fn read_face_hashed(
     let post = match gated(font.post())? {
         None => Json::Null,
         Some(p) => {
-            let g = p.glyph_names();
-            obj! {"glyph_name_count" => g.len(), "glyph_names_sha256" => sha_hex(g.join("\n").as_bytes()),
+            let g = p.glyph_names_raw();
+            obj! {"glyph_name_count" => g.len(), "glyph_names_sha256" => sha_hex(&g.join(&b'\n')),
             "version_raw" => p.version_raw, "italic_angle_raw" => p.italic_angle_raw,
             "underline_position" => p.underline_position,
             "underline_thickness" => p.underline_thickness,
@@ -311,6 +361,7 @@ fn read_face_hashed(
         "fvar" => fvar(font),
         "variation" => variation(font),
         "outlines" => Json::Obj(outlines),
+        "hmtx_metrics" => hmtx_metrics(font),
         "layout" => obj! {"GSUB" => layout_value(font.gsub()), "GPOS" => layout_value(font.gpos())},
     })
 }
@@ -404,5 +455,71 @@ mod tests {
                 "face lacks the table digest {want}: {rendered}"
             );
         }
+    }
+
+    /// A TrueType sfnt holding only `hhea`, `maxp` and `hmtx`.
+    fn metrics_font(nhm: u16, glyphs: u16, hmtx: &[u8]) -> Vec<u8> {
+        let mut hhea = vec![0u8; 36];
+        hhea[34..36].copy_from_slice(&nhm.to_be_bytes());
+        let mut maxp = 0x0000_5000u32.to_be_bytes().to_vec();
+        maxp.extend_from_slice(&glyphs.to_be_bytes());
+        let tables: [(&[u8; 4], &[u8]); 3] = [(b"hhea", &hhea), (b"hmtx", hmtx), (b"maxp", &maxp)];
+        let mut b = vec![0, 1, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0];
+        let mut at = 12 + 16 * tables.len();
+        for (tag, d) in &tables {
+            b.extend_from_slice(*tag);
+            b.extend_from_slice(&[0; 4]);
+            b.extend_from_slice(&(at as u32).to_be_bytes());
+            b.extend_from_slice(&(d.len() as u32).to_be_bytes());
+            at += d.len();
+        }
+        for (_, d) in &tables {
+            b.extend_from_slice(d);
+        }
+        b
+    }
+
+    fn metrics_of(bytes: &[u8], options: Options) -> String {
+        let faces = read(bytes, options).expect("read");
+        let Json::Obj(m) = &faces[0] else {
+            panic!("not an object")
+        };
+        let (_, v) = m.iter().find(|(k, _)| *k == "hmtx_metrics").expect("key");
+        format!("{v:?}")
+    }
+
+    #[test]
+    fn hmtx_metrics_digests_advance_u32_then_lsb_i32_with_the_last_advance_repeated() {
+        // 2 hMetrics (advance 500/lsb -3, advance 700/lsb 40), then lsb -5 and 6 for gids 2, 3.
+        let hmtx = [0x01, 0xF4, 0xFF, 0xFD, 0x02, 0xBC, 0, 40, 0xFF, 0xFB, 0, 6];
+        let mut want = Vec::new();
+        for (adv, lsb) in [(500u32, -3i32), (700, 40), (700, -5), (700, 6)] {
+            want.extend_from_slice(&adv.to_be_bytes());
+            want.extend_from_slice(&lsb.to_be_bytes());
+        }
+        let got = metrics_of(&metrics_font(2, 4, &hmtx), Options::default());
+        assert!(got.contains(&sha_hex(&want)) && got.contains('4'), "{got}");
+    }
+
+    #[test]
+    fn hmtx_metrics_reports_the_error_class_ruby_raises() {
+        let bad_nhm = metrics_of(&metrics_font(0, 2, &[0; 8]), Options::default());
+        assert!(bad_nhm.contains("ArgumentError"), "{bad_nhm}");
+        let too_many = metrics_of(&metrics_font(3, 2, &[0; 12]), Options::default());
+        assert!(too_many.contains("ArgumentError"), "{too_many}");
+        let short = metrics_of(&metrics_font(2, 4, &[0; 11]), Options::default());
+        assert!(short.contains("Fontisan::CorruptedTableError"), "{short}");
+    }
+
+    #[test]
+    fn hmtx_metrics_is_null_in_metadata_mode_and_without_hmtx() {
+        let font = metrics_font(1, 1, &[0; 4]);
+        let meta = Options {
+            mode: crate::sfnt::LoadingMode::Metadata,
+            ..Options::default()
+        };
+        assert_eq!(metrics_of(&font, meta), "Null");
+        let no_hmtx = [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        assert_eq!(metrics_of(&no_hmtx, Options::default()), "Null");
     }
 }

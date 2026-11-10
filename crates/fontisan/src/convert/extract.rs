@@ -58,6 +58,17 @@ pub fn extract(input: &[u8], index: usize) -> Result<Extracted, ConvertError> {
         let pos = out.len();
         let toff = u32::from_be_bytes([e[8], e[9], e[10], e[11]]) as usize;
         let tlen = u32::from_be_bytes([e[12], e[13], e[14], e[15]]) as usize;
+        // Ruby seeks to the offset and reads `tlen` bytes: at or past the end of the
+        // file that read returns nil, and the member's writer raises on the table.
+        if tlen > 0 && toff >= input.len() {
+            return Err(ConvertError::new(
+                ERROR_CLASS,
+                format!(
+                    "Unexpected error during unpacking: Missing table data for tag '{}'",
+                    String::from_utf8_lossy(&e[0..4])
+                ),
+            ));
+        }
         let start = toff.min(input.len());
         let end = toff.saturating_add(tlen).min(input.len());
         out.extend_from_slice(&input[start..end]);
@@ -70,9 +81,8 @@ pub fn extract(input: &[u8], index: usize) -> Result<Extracted, ConvertError> {
         }
         out[12 + 16 * i + 8..12 + 16 * i + 12].copy_from_slice(&(pos as u32).to_be_bytes());
     }
-    // A `head` offset past the end of the collection has no table behind it; Ruby would
-    // seek there and grow the file to that offset (up to 4 GiB from a 100-byte input),
-    // so the adjustment is skipped instead. Real fonts always have `head` inside the file.
+    // An empty `head` at an offset past the end has no table behind it; Ruby would seek
+    // there and grow the file to that offset, so the adjustment is skipped instead.
     if let Some(toff) = head_entry_offset.filter(|t| t.saturating_add(12) <= input.len()) {
         // Ruby writes the adjustment at the member's ORIGINAL head offset + 8.
         super::writer::set_checksum_adjustment(&mut out, toff + 8);
@@ -104,18 +114,52 @@ pub fn extract(input: &[u8], index: usize) -> Result<Extracted, ConvertError> {
 mod tests {
     use super::extract;
 
-    /// Found by the 1j-abi mutation run: a `head` directory offset near u32::MAX made
-    /// `set_checksum_adjustment` resize the output to ~4 GiB.
-    #[test]
-    fn head_offset_past_the_collection_does_not_grow_the_output() {
+    fn one_table_ttc(tag: &[u8; 4], offset: u32, length: u32) -> Vec<u8> {
         let mut ttc = b"ttcf".to_vec();
         ttc.extend([0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 16]);
         ttc.extend([0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]); // sfnt header, one table
-        ttc.extend(b"head");
+        ttc.extend(tag);
         ttc.extend([0; 4]);
-        ttc.extend(0xFFFF_FFF0u32.to_be_bytes());
-        ttc.extend(54u32.to_be_bytes());
-        let out = extract(&ttc, 0).expect("extract");
-        assert!(out.data.len() < 1024, "output grew to {}", out.data.len());
+        ttc.extend(offset.to_be_bytes());
+        ttc.extend(length.to_be_bytes());
+        ttc
+    }
+
+    /// Found by the 1j-abi mutation run: a `head` directory offset near u32::MAX made
+    /// `set_checksum_adjustment` resize the output to ~4 GiB. Ruby raises for the
+    /// table (no data behind the offset); so does the engine, and writes nothing.
+    #[test]
+    fn head_offset_past_the_collection_is_missing_table_data() {
+        let ttc = one_table_ttc(b"head", 0xFFFF_FFF0, 54);
+        let err = extract(&ttc, 0).expect_err("table behind the offset is missing");
+        assert_eq!(err.class, "Fontisan::Error");
+        assert_eq!(
+            err.message,
+            "Unexpected error during unpacking: Missing table data for tag 'head'"
+        );
+    }
+
+    /// #159 break-test F2: a table whose offset sits at or past the end of the file
+    /// is missing data in Ruby, for any tag, including at exactly the end.
+    #[test]
+    fn table_offset_at_or_past_the_end_is_missing_table_data() {
+        for tag in [b"glyf", b"hmtx"] {
+            let probe = one_table_ttc(tag, 0, 4);
+            let ttc = one_table_ttc(tag, probe.len() as u32, 4);
+            let err = extract(&ttc, 0).expect_err("offset at the end of the file");
+            assert!(err.message.ends_with(&format!(
+                "Missing table data for tag '{}'",
+                std::str::from_utf8(tag).unwrap()
+            )));
+        }
+    }
+
+    /// A zero-length table at the end reads as an empty string in Ruby, and a table that
+    /// starts inside the file but runs past its end is written truncated.
+    #[test]
+    fn empty_and_truncated_tables_are_still_written() {
+        let probe = one_table_ttc(b"cvt ", 0, 0);
+        assert!(extract(&one_table_ttc(b"cvt ", probe.len() as u32, 0), 0).is_ok());
+        assert!(extract(&one_table_ttc(b"cvt ", 12, 4096), 0).is_ok());
     }
 }

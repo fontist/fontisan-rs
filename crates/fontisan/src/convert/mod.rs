@@ -18,6 +18,7 @@ use std::fmt;
 
 use crate::sfnt::{self, Format};
 
+pub(crate) use collection::first_face;
 pub use extract::{Extracted, extract};
 pub use writer::write_font;
 
@@ -48,9 +49,6 @@ impl ConvertError {
                 message.as_ref()
             ),
         )
-    }
-    pub(crate) fn unsupported(message: impl Into<String>) -> Self {
-        Self::new(UNSUPPORTED_CLASS, message)
     }
 }
 
@@ -92,7 +90,21 @@ impl Target {
 /// position and its last data, like a Ruby hash).
 pub(crate) type Tables = Vec<([u8; 4], Vec<u8>)>;
 
+/// Strict directory read, as Ruby's convert, instance, audit and read paths behave:
+/// a table running past the end of the file rejects the font.
 pub(crate) fn tables_of(sfnt: &[u8]) -> Result<(u32, Tables), ConvertError> {
+    tables_of_with(sfnt, false)
+}
+
+/// Lenient directory read, as Ruby's subsetter loads a font: each table is read with
+/// `io.seek(off); io.read(len)`, so a length past the end of the file is clamped and a
+/// non-empty read at or past the end is nil (an absent table). Only the subset path
+/// tolerates this; every other Ruby reader raises.
+pub(crate) fn tables_of_lenient(sfnt: &[u8]) -> Result<(u32, Tables), ConvertError> {
+    tables_of_with(sfnt, true)
+}
+
+fn tables_of_with(sfnt: &[u8], lenient: bool) -> Result<(u32, Tables), ConvertError> {
     let bad = || ConvertError::transform("invalid sfnt table directory");
     let hdr = sfnt.get(..12).ok_or_else(bad)?;
     let version = u32::from_be_bytes([hdr[0], hdr[1], hdr[2], hdr[3]]);
@@ -103,11 +115,23 @@ pub(crate) fn tables_of(sfnt: &[u8]) -> Result<(u32, Tables), ConvertError> {
         let tag = [e[0], e[1], e[2], e[3]];
         let off = u32::from_be_bytes([e[8], e[9], e[10], e[11]]) as usize;
         let len = u32::from_be_bytes([e[12], e[13], e[14], e[15]]) as usize;
-        let end = off.checked_add(len).ok_or_else(bad)?;
-        let data = sfnt.get(off..end).ok_or_else(bad)?.to_vec();
-        match out.iter_mut().find(|(t, _)| *t == tag) {
-            Some(slot) => slot.1 = data,
-            None => out.push((tag, data)),
+        let data = if lenient {
+            if len > 0 && off >= sfnt.len() {
+                None
+            } else {
+                Some(sfnt[off.min(sfnt.len())..off.saturating_add(len).min(sfnt.len())].to_vec())
+            }
+        } else {
+            let end = off.checked_add(len).ok_or_else(bad)?;
+            Some(sfnt.get(off..end).ok_or_else(bad)?.to_vec())
+        };
+        match (out.iter().position(|(t, _)| *t == tag), data) {
+            (Some(i), Some(d)) => out[i].1 = d,
+            (Some(i), None) => {
+                out.remove(i);
+            }
+            (None, Some(d)) => out.push((tag, d)),
+            (None, None) => {}
         }
     }
     Ok((version, out))
@@ -133,7 +157,7 @@ fn require_core_tables(tables: &Tables) -> Result<(), ConvertError> {
 const POST_MSG: &str = "Required table 'post' is missing";
 const NAME_MSG: &str = "Font structure validation failed for check 'required_tables', Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing, Required table 'name' is missing";
 const OS2_MSG: &str = "Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing, Required table 'OS/2' is missing";
-const CMAP_MSG: &str = "Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing, Exception during check execution: NoMethodError - undefined method 'valid_glyph_indices?' for nil";
+const CMAP_MSG: &str = "Required table 'cmap' is missing, Required table 'cmap' is missing, Required table 'cmap' is missing";
 
 /// Ruby's output validation when a required table is absent from the source.
 /// Ruby repeats a clause once per failing check; the texts above are its
@@ -306,11 +330,9 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
 
     // 1i-instance: a variable font goes through instancing at its default
     // location first, whatever the target (Ruby's `:instance` strategy).
-    let tables = if is_variable && !has(&tables, b"gvar") && !has(&tables, b"CFF2") {
-        // No variation outlines to apply (gvar or CFF2 dropped): Ruby converts
-        // the default outlines and drops the variation tables.
-        crate::instance::drop_variation_tables(tables)
-    } else if is_variable {
+    // A variable font with neither gvar nor CFF2 is `:static` to Ruby's
+    // `FormatDetector#variation_type`: every table passes through untouched.
+    let tables = if is_variable && (has(&tables, b"gvar") || has(&tables, b"CFF2")) {
         if has(&tables, b"CFF2") {
             return Err(ConvertError::transform(
                 "Static instancing needs TrueType outlines with gvar (CFF2 variable fonts are not supported yet)",
@@ -344,15 +366,14 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
                     ));
                 }
                 require_core_tables(&tables)?;
-                if !has(&tables, b"name") {
-                    // Ruby fails while writing the rebuilt font (its own bug, verbatim).
-                    return Err(ConvertError::transform(
-                        "item 0 must have BINARY encoding, got: UTF-8",
-                    ));
-                }
                 validate_output_tables(
                     &tables,
-                    &[(b"post", POST_MSG), (b"OS/2", OS2_MSG), (b"cmap", CMAP_MSG)],
+                    &[
+                        (b"post", POST_MSG),
+                        (b"name", NAME_MSG),
+                        (b"OS/2", OS2_MSG),
+                        (b"cmap", CMAP_MSG),
+                    ],
                 )?;
                 let converted = outline_t2o::convert_ttf_to_otf(&tables)?;
                 let out = write_font(&converted, 0x4F54_544F);
@@ -368,8 +389,11 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
             }
             // end 1h-o2t
             if has(&tables, b"glyf") != want_glyf {
-                return Err(ConvertError::unsupported(
-                    "CFF to TrueType outline conversion is card 1h-o2t",
+                // Only a CFF2-flavoured source reaches here (glyf wanted, none present,
+                // no CFF table). Ruby's CFF2 source check rejects it: the CFF2 table is
+                // absent or fails to parse.
+                return Err(ConvertError::transform(
+                    "CFF2 font missing required CFF2 table",
                 ));
             }
             // Ruby validates the written font unless the detected source format
@@ -395,5 +419,58 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
             woff2::encode_woff2(src, Some(timestamp))
                 .map_err(|e| ConvertError::transform(e.to_string()))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn core() -> Tables {
+        ["head", "hhea", "maxp"]
+            .iter()
+            .map(|t| {
+                (
+                    <[u8; 4]>::try_from(format!("{t:<4}").as_bytes()).unwrap(),
+                    vec![0; 54],
+                )
+            })
+            .collect()
+    }
+
+    fn sfnt(mut tables: Tables, extra: &[&[u8; 4]]) -> Vec<u8> {
+        tables.extend(extra.iter().map(|t| (**t, vec![0; 8])));
+        write_font(&tables, 0x4F54_544F)
+    }
+
+    #[test]
+    fn cff2_source_without_loadable_cff2_to_ttf_matches_ruby() {
+        // Ruby's CFF2 source check: no internal planning id, no Unsupported class.
+        let font = sfnt(core(), &[b"CFF2"]);
+        let e = convert(&font, Target::Ttf, 0).expect_err("fails");
+        assert_eq!(e.class, ERROR_CLASS);
+        assert_eq!(
+            e.message,
+            "Conversion failed: Transformation failed: CFF2 font missing required CFF2 table"
+        );
+    }
+
+    #[test]
+    fn variable_font_without_gvar_or_cff2_keeps_fvar_through_convert() {
+        // `:static` to Ruby: the tables pass through, so the same source check applies.
+        let font = sfnt(core(), &[b"fvar", b"CFF "]);
+        let out = convert(&font, Target::Woff, 0).expect("converts");
+        assert!(out.starts_with(b"wOFF"));
+    }
+
+    #[test]
+    fn missing_cmap_in_a_cff_sourced_ttf_has_no_glyph_index_clause() {
+        let mut t = core();
+        for tag in [b"post", b"name", b"OS/2"] {
+            t.push((*tag, vec![0; 8]));
+        }
+        let e = validate_ttf_output(&t).expect_err("fails");
+        assert!(e.message.contains("Required table 'cmap' is missing"));
+        assert!(!e.message.contains("valid_glyph_indices?"), "{}", e.message);
     }
 }

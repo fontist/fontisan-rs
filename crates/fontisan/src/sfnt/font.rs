@@ -185,6 +185,16 @@ impl TableEntry {
     pub fn tag_str(&self) -> String {
         String::from_utf8_lossy(&self.tag).into_owned()
     }
+
+    /// `self.tag_str() == tag` without allocating: ASCII tags (all real ones)
+    /// compare bytewise; anything else takes the lossy-decoding path.
+    pub fn tag_is(&self, tag: &str) -> bool {
+        if self.tag.is_ascii() {
+            self.tag == *tag.as_bytes()
+        } else {
+            self.tag_str() == tag
+        }
+    }
 }
 
 /// One entry of [`Font::table_summaries`]: the facade's table digest row minus
@@ -211,6 +221,10 @@ pub struct Font<'a> {
     /// numTables, searchRange, entrySelector, rangeShift as the directory stores them.
     directory_fields: [u16; 4],
     entries: Vec<TableEntry>,
+    /// Decoded tag -> index of the FIRST entry carrying it (what a linear
+    /// `find` returns); keeps per-tag lookups O(1) on directories with
+    /// thousands of entries.
+    first_by_tag: HashMap<String, usize>,
     /// Eagerly read table bytes by tag (last entry wins). Empty when lazy.
     eager: HashMap<[u8; 4], Range>,
     /// The `Woff2Header` of a single-font WOFF2 (Ruby's `Woff2Font`); `None` for
@@ -322,6 +336,10 @@ impl<'a> Font<'a> {
                 length: c.u32()?,
             });
         }
+        let mut first_by_tag = HashMap::with_capacity(entries.len());
+        for (i, e) in entries.iter().enumerate() {
+            first_by_tag.entry(e.tag_str()).or_insert(i);
+        }
         Ok(Self {
             bytes,
             format,
@@ -329,6 +347,7 @@ impl<'a> Font<'a> {
             sfnt_version,
             directory_fields: [num_tables, search_range, entry_selector, range_shift],
             entries,
+            first_by_tag,
             eager: HashMap::new(),
             woff2_header: None,
         })
@@ -361,7 +380,7 @@ impl<'a> Font<'a> {
             .entries
             .iter()
             .copied()
-            .filter(|e| METADATA_TABLES.contains(&e.tag_str().as_str()))
+            .filter(|e| METADATA_TABLES.iter().any(|t| e.tag_is(t)))
             .collect();
         ents.sort_by_key(|e| e.offset);
         let mut i = 0;
@@ -439,7 +458,11 @@ impl<'a> Font<'a> {
         self.entries.iter().map(TableEntry::tag_str).collect()
     }
     pub fn has_table(&self, tag: &str) -> bool {
-        self.entries.iter().any(|e| e.tag_str() == tag)
+        self.first_by_tag.contains_key(tag)
+    }
+    /// First directory entry whose decoded tag is `tag`.
+    fn entry(&self, tag: &str) -> Option<&TableEntry> {
+        self.first_by_tag.get(tag).map(|&i| &self.entries[i])
     }
 
     /// The facade's `raw_table` (`font.table_data[tag]`): Ruby's WOFF/WOFF2 fonts
@@ -458,7 +481,7 @@ impl<'a> Font<'a> {
             return self.table_data(tag);
         }
         // The decoded store holds every table whatever the eager/lazy setting.
-        let e = self.entries.iter().find(|e| e.tag_str() == tag)?;
+        let e = self.entry(tag)?;
         let (o, l) = self.read_at(e.offset as usize, e.length as usize)?;
         Some(&self.bytes[o..o + l])
     }
@@ -470,10 +493,10 @@ impl<'a> Font<'a> {
             return None;
         }
         let range = if self.options.lazy && !self.format.is_collection() {
-            let e = self.entries.iter().find(|e| e.tag_str() == tag)?;
+            let e = self.entry(tag)?;
             self.read_at(e.offset as usize, e.length as usize)
         } else {
-            let e = self.entries.iter().find(|e| e.tag_str() == tag)?;
+            let e = self.entry(tag)?;
             *self.eager.get(&e.tag)?
         };
         range.map(|(o, l)| &self.bytes[o..o + l])

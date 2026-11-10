@@ -5,6 +5,7 @@
 #
 #   scripts/woff2-reference.sh <woff2_decompress> <out dir> <dir with .woff2 files>...
 #
+# Malformed corpus inputs (malformed-*) are not decodable references and are skipped.
 # Output: <out dir>/<basename> (input copy) and <basename>.ref (the tool names a collection's output .ttf,
 # so the format is detected by magic bytes in the test, not by extension).
 # Then: FONTISAN_WOFF2_REF_DIR=<out dir> cargo test --test woff_decode
@@ -14,7 +15,7 @@ shift 2
 mkdir -p "$out"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-find "$@" -name '*.woff2' | sort | while read -r f; do
+find "$@" -name '*.woff2' ! -name 'malformed-*' | sort | while read -r f; do
   base=$(basename "$f")
   cp "$f" "$work/in.woff2"
   rm -f "$work/in.ttf"

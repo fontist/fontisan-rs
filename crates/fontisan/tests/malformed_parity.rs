@@ -163,5 +163,5 @@ fn malformed_goldens_match() {
         }
         kinds += 1;
     }
-    assert_eq!(kinds, 11, "malformed kinds");
+    assert_eq!(kinds, 17, "malformed kinds");
 }

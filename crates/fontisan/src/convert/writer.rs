@@ -91,6 +91,9 @@ pub fn write_font(tables: &Tables, sfnt_version: u32) -> Vec<u8> {
         out.resize(out.len().next_multiple_of(4), 0);
     }
     if let Some(h) = head_offset {
+        if out.len() < h + 12 {
+            out.resize(h + 12, 0); // IO#seek + write grows a file that ends inside head
+        }
         out[h + 8..h + 12].fill(0);
         set_checksum_adjustment(&mut out, h + 8);
     }
@@ -105,4 +108,20 @@ pub(crate) fn set_checksum_adjustment(out: &mut Vec<u8>, at: usize) {
         out.resize(at + 4, 0);
     }
     out[at..at + 4].copy_from_slice(&adj.to_be_bytes());
+}
+
+#[cfg(test)]
+mod short_head_tests {
+    use super::*;
+
+    #[test]
+    fn head_shorter_than_twelve_bytes_is_grown_not_a_panic() {
+        // Ruby's FontWriter zeroes checkSumAdjustment with IO#seek + write, which
+        // grows a file that ends inside head; the Rust slice index used to panic.
+        let tables: Tables = vec![(*b"head", vec![1, 2, 3, 4])];
+        let out = write_font(&tables, 0x0001_0000);
+        let h = 12 + 16;
+        assert_eq!(&out[h..h + 4], &[1, 2, 3, 4]);
+        assert!(out.len() >= h + 12);
+    }
 }
