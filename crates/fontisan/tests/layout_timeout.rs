@@ -29,3 +29,15 @@ fn font_layout_timeout_input_is_fast() {
 fn font_layout_many_scripts_input_is_fast() {
     assert_fast("timeout-font-layout-scripts.ttf");
 }
+
+/// `font_load` timeout (CI run 42786277601, one input over 10 s).
+#[test]
+fn font_load_timeout_input_is_fast() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fuzz/seeds/timeout-font-load-slow.bin");
+    let data = std::fs::read(path).unwrap();
+    let start = Instant::now();
+    bodies::font_load(&data);
+    let took = start.elapsed();
+    assert!(took < Duration::from_secs(1), "font_load took {took:?}");
+}
