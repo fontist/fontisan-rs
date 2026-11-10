@@ -359,8 +359,8 @@ pub(super) fn hmtx_metrics(
             "undefined method 'number_of_h_metrics' for nil",
         )
     })?;
-    let nhm =
-        u32::from(be16(hhea, 34).ok_or_else(|| SubsetError::corrupted("hhea table is too short"))?);
+    // The builder has parsed hhea already: it is empty (Ruby reads zeros) or complete.
+    let nhm = u32::from(be16(hhea, 34).unwrap_or(0));
     if nhm < 1 {
         return Err(SubsetError::arg(format!(
             "numberOfHMetrics must be >= 1, got: {nhm}"
@@ -419,10 +419,14 @@ pub(super) fn hhea(
     raw: &[u8],
     num_glyphs: u32,
 ) -> Result<Vec<u8>, SubsetError> {
-    let mut d = raw
-        .get(..36)
-        .ok_or_else(|| SubsetError::corrupted("hhea table is too short"))?
-        .to_vec();
+    // An empty hhea parses to an all-zero record (`to_binary_s` is 36 zero bytes).
+    let mut d = if raw.is_empty() {
+        vec![0; 36]
+    } else {
+        raw.get(..36)
+            .ok_or_else(|| SubsetError::corrupted("hhea table is too short"))?
+            .to_vec()
+    };
     // The strategy reads numberOfHMetrics from a still-unparsed hmtx: the
     // subset glyph count.
     d[34..36].copy_from_slice(&(mapping.size() as u16).to_be_bytes());

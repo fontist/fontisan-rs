@@ -155,24 +155,24 @@ fn build(tables: &Tables, glyph_ids: &[u32], profile: &str) -> Result<Vec<u8>, S
     if glyph_ids.is_empty() {
         return Err(SubsetError::arg("At least one glyph ID must be provided"));
     }
+    // Ruby's `font.table(tag)` parses each required table in this order, so a short
+    // one raises BinData's EOFError / IOError (a field with no bytes left / only some
+    // bytes left) before the next tag is looked at, before anything is built.
+    let mut num_glyphs = 0;
     for tag in ["head", "hhea", "maxp"] {
-        // Ruby's `font.table(tag)` parses the table, so a head shorter than its 54
-        // bytes raises BinData's EOFError / IOError here, before anything is built.
-        if tag == "head" {
-            if let Some(Err(e)) = find(tables, tag).map(sfnt::Head::parse) {
-                return Err(SubsetError::new(e.class.ruby_name(), e.message));
-            }
-        }
-        if find(tables, tag).is_none() {
+        let Some(data) = find(tables, tag) else {
             return Err(SubsetError::new(
                 "Fontisan::MissingTableError",
                 format!("Required table '{tag}' not found in font"),
             ));
-        }
+        };
+        let parsed = match tag {
+            "head" => sfnt::Head::parse(data).map(|_| ()),
+            "hhea" => sfnt::Hhea::parse(data).map(|_| ()),
+            _ => sfnt::Maxp::parse(data).map(|m| num_glyphs = u32::from(m.num_glyphs)),
+        };
+        parsed.map_err(|e| SubsetError::new(e.class.ruby_name(), e.message))?;
     }
-    let maxp = find(tables, "maxp").unwrap_or(&[]);
-    let num_glyphs =
-        u32::from(be16(maxp, 4).ok_or_else(|| SubsetError::corrupted("maxp table is too short"))?);
     for &g in glyph_ids {
         if g >= num_glyphs {
             return Err(SubsetError::arg(format!(
@@ -451,6 +451,81 @@ mod tests {
             let got = err(subset(&font_with_short_head(len), &[0], "web"));
             assert_eq!(got, (class.to_string(), message.to_string()), "head {len}");
         }
+    }
+
+    /// CFF-flavoured font with the given `hhea` and `maxp` bodies (head complete, 5 glyphs
+    /// in `maxp` when it is whole); the CFF table is never reached by these cases.
+    fn font_with_hhea_maxp(hhea: Vec<u8>, maxp: Vec<u8>) -> Vec<u8> {
+        font(&[
+            (b"CFF ", vec![0; 4]),
+            (b"head", head()),
+            (b"hhea", hhea),
+            (b"hmtx", vec![0; 8]),
+            (b"maxp", maxp),
+        ])
+    }
+
+    #[test]
+    fn short_hhea_and_maxp_raise_bindata_errors_like_ruby() {
+        // Ruby (`validate_required_tables!`) parses head, hhea, maxp in that order.
+        // Measured with Builder.new(font, [1], web).build on SourceSans3-Regular.otf
+        // and .ttf with one table's length cut (same outcomes for both fonts).
+        let eof = ("EOFError", "End of file reached");
+        let io = ("IOError", "data truncated");
+        let whole_maxp = vec![0, 0, 0x50, 0, 0, 5];
+        for (len, (class, message)) in [
+            (1, io),
+            (2, io),
+            (4, eof),
+            (5, io),
+            (6, eof),
+            (7, io),
+            (30, eof),
+            (31, eof),
+            (32, eof),
+            (33, io),
+            (34, eof),
+            (35, io),
+        ] {
+            let f = font_with_hhea_maxp(vec![0; len], whole_maxp.clone());
+            let got = err(subset(&f, &[1], "web"));
+            assert_eq!(got, (class.to_string(), message.to_string()), "hhea {len}");
+        }
+        // maxp version 0.5 (otf): 1 and 2 bytes IOError, 4 EOFError, 5 IOError.
+        for (len, (class, message)) in [(1, io), (2, io), (4, eof), (5, io)] {
+            let f = font_with_hhea_maxp(vec![0; 36], whole_maxp[..len].to_vec());
+            let got = err(subset(&f, &[1], "web"));
+            assert_eq!(got, (class.to_string(), message.to_string()), "maxp {len}");
+        }
+        // maxp version 1.0 (ttf): 6 EOFError, 7 IOError, 30 EOFError, 31 IOError.
+        for (len, (class, message)) in [(6, eof), (7, io), (30, eof), (31, io)] {
+            let mut m = vec![0, 1, 0, 0, 0, 5];
+            m.resize(len, 0);
+            let f = font_with_hhea_maxp(vec![0; 36], m);
+            let got = err(subset(&f, &[1], "web"));
+            assert_eq!(got, (class.to_string(), message.to_string()), "maxp1 {len}");
+        }
+    }
+
+    #[test]
+    fn empty_hhea_and_maxp_parse_to_zeros_like_ruby() {
+        // An empty table parses to an all-zero record in Ruby.
+        let f = font_with_hhea_maxp(vec![], vec![0, 0, 0x50, 0, 0, 5]);
+        assert_eq!(
+            err(subset(&f, &[1], "web")),
+            (
+                "Fontisan::SubsettingError".to_string(),
+                "Failed to subset table 'hhea': numberOfHMetrics must be >= 1, got: 0".to_string()
+            )
+        );
+        let f = font_with_hhea_maxp(vec![0; 36], vec![]);
+        assert_eq!(
+            err(subset(&f, &[1], "web")),
+            (
+                "ArgumentError".to_string(),
+                "Glyph ID 1 exceeds font's glyph count (0)".to_string()
+            )
+        );
     }
 
     #[test]
