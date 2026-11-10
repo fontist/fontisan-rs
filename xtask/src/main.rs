@@ -6,9 +6,9 @@ use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// fontist/fontisan branch issue-156/pr162-next (PR #162 ruby plus table-drop sweep fixes). Bumped when goldens land.
+/// fontist/fontisan PR #162 (issue-156/phase2-prep): Ruby-tier large goldens and the engine pin to this crate. Bumped when goldens land.
 const FONTISAN_REPO: &str = "https://github.com/fontist/fontisan.git";
-const FONTISAN_SHA: &str = "2b850c4a8cd44e7df28caaf227e69b5bf30619d5";
+const FONTISAN_SHA: &str = "91beb5b9910fdc0ad1e759078ad5af51e84a46fc";
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
