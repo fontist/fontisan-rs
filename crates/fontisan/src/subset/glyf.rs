@@ -427,6 +427,9 @@ pub(super) fn hhea(
             .ok_or_else(|| SubsetError::corrupted("hhea table is too short"))?
             .to_vec()
     };
+    // Ruby rebuilds the record from its parsed fields and writes the four reserved
+    // int16s (offset 24..32) as zeros, whatever the source held (round 2, F7).
+    d[24..32].fill(0);
     // The strategy reads numberOfHMetrics from a still-unparsed hmtx: the
     // subset glyph count.
     d[34..36].copy_from_slice(&(mapping.size() as u16).to_be_bytes());
