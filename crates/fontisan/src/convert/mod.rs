@@ -184,6 +184,10 @@ fn validate_checks(tables: &Tables, checks: Vec<(&[u8; 4], String)>) -> Result<(
     if cmap_is_empty(tables) {
         pieces.extend(vec!["Table 'cmap' failed validation".to_string(); 3]);
     }
+    if cmap_has_invalid_glyph(tables) {
+        // `cmap_glyph_indices` is the last cmap check in Ruby's profile (round 2, F10).
+        pieces.push("Font structure validation failed for check 'cmap_glyph_indices'".to_string());
+    }
     if pieces.is_empty() {
         return Ok(());
     }
@@ -203,6 +207,24 @@ fn table<'a>(tables: &'a Tables, tag: &[u8; 4]) -> Option<&'a [u8]> {
 /// An existing `cmap` that is empty or has no subtables fails Ruby's three cmap checks.
 fn cmap_is_empty(tables: &Tables) -> bool {
     table(tables, b"cmap").is_some_and(|c| c.get(2..4).is_none_or(|n| n == [0, 0]))
+}
+
+/// Ruby's `cmap.valid_glyph_indices?(maxp.num_glyphs)`: the chosen Unicode subtable maps no
+/// glyph id at or past `numGlyphs`. A missing cmap or maxp passes (`next true unless cmap`;
+/// a missing maxp is reported by its own check).
+fn cmap_has_invalid_glyph(tables: &Tables) -> bool {
+    let (Some(cmap), Some(maxp)) = (table(tables, b"cmap"), table(tables, b"maxp")) else {
+        return false;
+    };
+    let Some(num_glyphs) = maxp
+        .get(4..6)
+        .map(|b| u32::from(u16::from_be_bytes([b[0], b[1]])))
+    else {
+        return false;
+    };
+    crate::sfnt::Cmap::parse(cmap)
+        .map(|c| c.mappings().iter().any(|&(_, g)| g >= num_glyphs))
+        .unwrap_or(false)
 }
 
 /// Ruby's production-profile name checks on an existing `name` table: a

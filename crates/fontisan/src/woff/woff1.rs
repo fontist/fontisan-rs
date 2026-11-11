@@ -145,9 +145,9 @@ mod tests {
 
     #[test]
     fn rejects_a_length_claim_no_deflate_stream_can_reach() {
-        // 512 MiB claimed from a 100-byte payload: must fail before reserving it.
+        // 256 MiB claimed from a 100-byte payload: must fail before reserving it.
         let z = miniz_oxide::deflate::compress_to_vec_zlib(&[0u8; 100], 6);
-        let e = decode_woff(&woff_with(&z, 1 << 29)).unwrap_err();
+        let e = decode_woff(&woff_with(&z, 1 << 28)).unwrap_err();
         assert!(
             e.to_string().contains("implausible compression ratio"),
             "{e}"

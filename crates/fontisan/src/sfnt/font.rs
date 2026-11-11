@@ -494,7 +494,14 @@ impl<'a> Font<'a> {
         }
         let range = if self.options.lazy && !self.format.is_collection() {
             let e = self.entry(tag)?;
-            self.read_at(e.offset as usize, e.length as usize)
+            let r = self.read_at(e.offset as usize, e.length as usize);
+            // OpenTypeFont's lazy loader reads whole pages (`read(PAGE_SIZE) || ""`), so a
+            // table starting past EOF is held as an empty string, not nil (round 2, F6).
+            if r.is_none() && self.format == Format::Otf {
+                Some((self.bytes.len(), 0))
+            } else {
+                r
+            }
         } else {
             let e = self.entry(tag)?;
             *self.eager.get(&e.tag)?
