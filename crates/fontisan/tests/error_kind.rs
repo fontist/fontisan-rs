@@ -18,6 +18,7 @@ fn ffi(op: u32, flags: u32, input: &[u8]) -> (i32, i32, String) {
     };
     let mut out = std::ptr::null_mut();
     let status = unsafe { fontisan_call(&req, &mut out) };
+    assert!(!out.is_null(), "engine must always set the result block");
     let r = unsafe { &*out };
     let msg = unsafe { std::slice::from_raw_parts(r.error.message, r.error.message_len) };
     let got = (
@@ -50,6 +51,7 @@ fn success_has_kind_none_and_result_struct_announces_the_field() {
     };
     let mut out = std::ptr::null_mut();
     assert_eq!(unsafe { fontisan_call(&req, &mut out) }, 0);
+    assert!(!out.is_null(), "engine must always set the result block");
     let r = unsafe { &*out };
     assert_eq!(r.error_kind, ErrorKind::None as i32);
     assert!(r.header.struct_size as usize >= 72 || cfg!(not(target_pointer_width = "64")));
