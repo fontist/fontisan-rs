@@ -37,7 +37,7 @@ const MORE_COMPONENTS: u16 = 0x0020;
 const WE_HAVE_AN_X_AND_Y_SCALE: u16 = 0x0040;
 const WE_HAVE_A_TWO_BY_TWO: u16 = 0x0080;
 const WE_HAVE_INSTRUCTIONS: u16 = 0x0100;
-const MAX_OUTPUT: u64 = 1 << 30;
+use crate::woff::MAX_OUTPUT;
 
 fn bad(msg: impl std::fmt::Display) -> Error {
     Error::new(

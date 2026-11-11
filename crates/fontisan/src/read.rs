@@ -96,9 +96,11 @@ fn tag(t: &Tag) -> String {
     String::from_utf8_lossy(t).into_owned()
 }
 
-fn layout_value(r: Result<Option<LayoutTable>, Error>) -> Json {
-    match r {
-        Ok(Some(t)) => {
+/// Ruby's `layout_data` rescues only the mode-gating ArgumentError; a GSUB/GPOS body too short
+/// for its header raises (EOFError) out of `read`.
+fn layout_value(r: Result<Option<LayoutTable>, Error>) -> Result<Json, Error> {
+    Ok(match gated(r)? {
+        Some(t) => {
             let per_script = t.script_features();
             let scripts: Vec<Tag> = per_script.iter().map(|(s, _)| *s).collect();
             let features: BTreeMap<String, Vec<String>> = per_script
@@ -110,8 +112,8 @@ fn layout_value(r: Result<Option<LayoutTable>, Error>) -> Json {
                 "features" => Json::Map(features.into_iter().map(|(k, v)| (k, v.into())).collect()),
             }
         }
-        _ => Json::Null,
-    }
+        None => Json::Null,
+    })
 }
 
 fn ver(v: (u16, u16)) -> Json {
@@ -338,6 +340,7 @@ fn read_face_hashed(
             "min_mem_type1" => p.min_mem_type1, "max_mem_type1" => p.max_mem_type1}
         }
     };
+    let layout = obj! {"GSUB" => layout_value(font.gsub())?, "GPOS" => layout_value(font.gpos())?};
     let o = font.outline_summary_with(&mut digests.1);
     let mut outlines = vec![
         ("kind", Json::from(o.kind.map(|k| k.as_str()))),
@@ -362,7 +365,7 @@ fn read_face_hashed(
         "variation" => variation(font),
         "outlines" => Json::Obj(outlines),
         "hmtx_metrics" => hmtx_metrics(font),
-        "layout" => obj! {"GSUB" => layout_value(font.gsub()), "GPOS" => layout_value(font.gpos())},
+        "layout" => layout,
     })
 }
 

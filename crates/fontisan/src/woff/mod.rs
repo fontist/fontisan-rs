@@ -11,6 +11,7 @@ pub(crate) use woff2::{KNOWN_TAGS, brotli_inflate, triplet_decode};
 
 use std::fmt;
 
+pub(crate) use woff1::decode_tables as decode_woff_tables;
 pub use woff1::decode_woff;
 pub use woff2::{
     decode_woff2, decode_woff2_collection, decode_woff2_ruby_padding, is_woff2_collection,
@@ -34,8 +35,9 @@ pub(crate) fn err<T>(msg: &str) -> Result<T> {
     Err(Error(msg.to_string()))
 }
 
-/// Upper bound on any decoded size we will materialise (1 GiB).
-pub(crate) const MAX_OUTPUT: u64 = 1 << 30;
+/// Upper bound on any decoded size we will materialise (512 MiB). A 4 MB WOFF2 declaring
+/// 400 MiB peaked at 848 MB resident; the former 1 GiB cap extrapolated to ~2.2 GB.
+pub(crate) const MAX_OUTPUT: u64 = 1 << 29;
 
 /// Bounds-checked big-endian cursor.
 #[derive(Clone)]

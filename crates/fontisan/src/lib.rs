@@ -10,6 +10,8 @@
 pub mod audit;
 mod cffread;
 pub mod convert;
+mod error_kind;
+pub use error_kind::ErrorKind;
 pub mod indexability;
 pub mod instance;
 pub mod json;

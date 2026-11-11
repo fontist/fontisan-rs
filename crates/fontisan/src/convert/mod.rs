@@ -35,6 +35,10 @@ pub struct ConvertError {
 }
 
 impl ConvertError {
+    /// The machine-readable kind; switch on this, not on the message.
+    pub fn kind(&self) -> crate::ErrorKind {
+        crate::ErrorKind::from_class(self.class)
+    }
     pub(crate) fn new(class: &'static str, message: impl Into<String>) -> Self {
         Self {
             class,
@@ -180,6 +184,10 @@ fn validate_checks(tables: &Tables, checks: Vec<(&[u8; 4], String)>) -> Result<(
     if cmap_is_empty(tables) {
         pieces.extend(vec!["Table 'cmap' failed validation".to_string(); 3]);
     }
+    if cmap_has_invalid_glyph(tables) {
+        // `cmap_glyph_indices` is the last cmap check in Ruby's profile (round 2, F10).
+        pieces.push("Font structure validation failed for check 'cmap_glyph_indices'".to_string());
+    }
     if pieces.is_empty() {
         return Ok(());
     }
@@ -199,6 +207,24 @@ fn table<'a>(tables: &'a Tables, tag: &[u8; 4]) -> Option<&'a [u8]> {
 /// An existing `cmap` that is empty or has no subtables fails Ruby's three cmap checks.
 fn cmap_is_empty(tables: &Tables) -> bool {
     table(tables, b"cmap").is_some_and(|c| c.get(2..4).is_none_or(|n| n == [0, 0]))
+}
+
+/// Ruby's `cmap.valid_glyph_indices?(maxp.num_glyphs)`: the chosen Unicode subtable maps no
+/// glyph id at or past `numGlyphs`. A missing cmap or maxp passes (`next true unless cmap`;
+/// a missing maxp is reported by its own check).
+fn cmap_has_invalid_glyph(tables: &Tables) -> bool {
+    let (Some(cmap), Some(maxp)) = (table(tables, b"cmap"), table(tables, b"maxp")) else {
+        return false;
+    };
+    let Some(num_glyphs) = maxp
+        .get(4..6)
+        .map(|b| u32::from(u16::from_be_bytes([b[0], b[1]])))
+    else {
+        return false;
+    };
+    crate::sfnt::Cmap::parse(cmap)
+        .map(|c| c.mappings().iter().any(|&(_, g)| g >= num_glyphs))
+        .unwrap_or(false)
 }
 
 /// Ruby's production-profile name checks on an existing `name` table: a
@@ -307,11 +333,8 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
     let sfnt_bytes: Vec<u8>;
     let raw: &[u8] = match format {
         Some(Format::Ttf | Format::Otf) => input,
-        Some(Format::Woff) => {
-            sfnt_bytes = crate::woff::decode_woff(input)
-                .map_err(|e| ConvertError::transform(e.to_string()))?;
-            &sfnt_bytes
-        }
+        // The tables come straight out of the decoder: no intermediate sfnt beside them.
+        Some(Format::Woff) => &[],
         Some(Format::Woff2) => {
             // Ruby's own WOFF2 rebuild (padding, flag RLE, table order), shared with reads.
             sfnt_bytes = crate::sfnt::woff2_view::single(input)
@@ -325,7 +348,12 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
             ));
         }
     };
-    let (sfnt_version, tables) = tables_of(raw)?;
+    let (sfnt_version, tables) = if format == Some(Format::Woff) {
+        crate::woff::decode_woff_tables(input)
+            .map_err(|e| ConvertError::transform(e.to_string()))?
+    } else {
+        tables_of(raw)?
+    };
     let is_variable = has(&tables, b"fvar");
 
     // 1i-instance: a variable font goes through instancing at its default

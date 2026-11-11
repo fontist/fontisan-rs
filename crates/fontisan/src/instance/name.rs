@@ -67,7 +67,14 @@ impl NameRewriter {
                 usize::from(u16_(data, p + 8)?),
                 usize::from(u16_(data, p + 10)?),
             );
-            let raw = sl(data, str_off + off, len)?;
+            // Ruby's `data[str_off + off, len]`: a string running past the table is cut
+            // short, one starting exactly at its end is empty; only a start beyond it
+            // is nil (a `NoMethodError`, here the truncated-table error). Round 2, F9.
+            let start = str_off + off;
+            if start > data.len() {
+                return Err(bad());
+            }
+            let raw = &data[start..start.saturating_add(len).min(data.len())];
             if lang < 0x8000 {
                 records.push(Record {
                     platform: plat,

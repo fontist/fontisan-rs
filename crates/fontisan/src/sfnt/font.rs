@@ -494,7 +494,14 @@ impl<'a> Font<'a> {
         }
         let range = if self.options.lazy && !self.format.is_collection() {
             let e = self.entry(tag)?;
-            self.read_at(e.offset as usize, e.length as usize)
+            let r = self.read_at(e.offset as usize, e.length as usize);
+            // OpenTypeFont's lazy loader reads whole pages (`read(PAGE_SIZE) || ""`), so a
+            // table starting past EOF is held as an empty string, not nil (round 2, F6).
+            if r.is_none() && self.format == Format::Otf {
+                Some((self.bytes.len(), 0))
+            } else {
+                r
+            }
         } else {
             let e = self.entry(tag)?;
             *self.eager.get(&e.tag)?
@@ -555,6 +562,30 @@ impl<'a> Font<'a> {
     }
 
     /// The facade's per-table digest rows (everything but the sha256).
+    /// Ruby's `font.table("CFF ")` parses the header on first access and raises
+    /// `CorruptedTableError` when it is invalid; an empty table (one that started past
+    /// EOF) is the reachable case. Deeper CFF structure is parsed on demand, not here.
+    fn cff_header_error(&self) -> Option<Error> {
+        let data = self.table_data("CFF ")?;
+        let ok = data.get(..4).is_some_and(|h| {
+            (h[0] == 1 || h[0] == 2) && h[1] == 0 && h[2] >= 4 && (1..=4).contains(&h[3])
+        });
+        if ok {
+            return None;
+        }
+        let h = |i: usize| data.get(i).copied().unwrap_or(0);
+        Some(Error::new(
+            ErrorClass::CorruptedTable,
+            format!(
+                "Failed to parse CFF table: Invalid CFF header: version={}.{}, hdr_size={}, off_size={}",
+                h(0),
+                h(1),
+                h(2),
+                h(3)
+            ),
+        ))
+    }
+
     pub fn table_summaries(&self) -> Vec<TableSummary> {
         self.entries
             .iter()
@@ -571,6 +602,7 @@ impl<'a> Font<'a> {
                             "post" => self.post().err(),
                             "name" => self.name().err(),
                             "cmap" => self.cmap().err(),
+                            "CFF " => self.cff_header_error(),
                             _ => None,
                         };
                         match err {

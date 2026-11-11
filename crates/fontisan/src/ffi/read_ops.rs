@@ -37,6 +37,7 @@ fn failed(e: &Error) -> FfiError {
         FontisanStatus::ReadFailed,
         crate::read::error_json(e).render(),
     )
+    .with_kind(e.kind())
 }
 
 pub fn read(input: &[u8], flags: u32) -> Result<Vec<u8>, FfiError> {
@@ -74,6 +75,7 @@ pub fn audit(input: &[u8], flags: u32) -> Result<Vec<u8>, FfiError> {
                     FontisanStatus::ReadFailed,
                     crate::audit::command_error_json(&e, stage).render(),
                 )
+                .with_kind(e.kind())
             })?;
     Ok(pack(
         &reports.iter().map(|r| r.to_json()).collect::<Vec<_>>(),
@@ -91,6 +93,7 @@ fn walk_failed(path: &Path, e: &std::io::Error) -> FfiError {
         FontisanStatus::InvalidArgument,
         format!("cannot read {}: {e}", path.display()),
     )
+    .with_kind(crate::ErrorKind::Io)
 }
 
 /// `input` = a UTF-8 file or directory path.

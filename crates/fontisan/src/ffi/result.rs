@@ -24,6 +24,12 @@ pub struct FontisanResult {
     pub error: FontisanErrorRow,
     pub payload: *const u8,
     pub payload_len: usize,
+    /// [`crate::ErrorKind`] as an i32 (`FONTISAN_KIND_*`), 0 on success. Appended after
+    /// ABI 1 shipped: the result block is engine-allocated and read-only for the
+    /// caller, so a caller built against the shorter struct still reads every older field;
+    /// `header.struct_size` says whether this field is present (>= 72 on 64-bit).
+    pub error_kind: i32,
+    pub reserved: i32,
 }
 
 /// `view` is first so a `*mut FontisanResult` is also the block's address.
@@ -36,6 +42,7 @@ pub(super) struct ResultBlock {
 
 pub(super) fn into_raw(
     status: FontisanStatus,
+    kind: crate::ErrorKind,
     message: &str,
     payload: Vec<u8>,
 ) -> *mut FontisanResult {
@@ -51,6 +58,8 @@ pub(super) fn into_raw(
         },
         payload: payload.as_ptr(),
         payload_len: payload.len(),
+        error_kind: kind.code(),
+        reserved: 0,
     };
     // Box<[u8]> keeps its heap address when the block moves into the Box.
     Box::into_raw(Box::new(ResultBlock {
