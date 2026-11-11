@@ -195,6 +195,18 @@ fn call_raw(req: *const FontisanRequest, with_out: bool) -> i32 {
         std::str::from_utf8(&message).is_ok(),
         "error message not UTF-8"
     );
+    // error_kind: 0 exactly on success, 1..=11 on every failure path.
+    if status == 0 {
+        assert_eq!(r.error_kind, 0, "success carries kind {}", r.error_kind);
+    } else {
+        assert!(!message.is_empty(), "status {status} with an empty message");
+        assert!(
+            (1..=11).contains(&r.error_kind),
+            "status {status} has kind {} ({text})",
+            r.error_kind
+        );
+    }
+    assert_eq!(r.reserved, 0, "reserved field");
     if status == 0 {
         assert!(message.is_empty(), "error text on success: {text}");
         if r.payload_len > 0 {
