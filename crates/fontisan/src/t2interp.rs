@@ -18,6 +18,15 @@ const MAX_DEPTH: usize = 64;
 /// execute. Real glyphs need hundreds; this only stops exponential subr fan-out.
 const MAX_OPS: usize = 1 << 20;
 
+/// Operators and operands all the charstrings of one font may execute. A font may hold
+/// 65535 glyphs and each may spend `MAX_OPS` through shared subroutines: a few MB of
+/// input would then run for an hour and build tens of GB of outline. Real fonts use a
+/// few tens of millions in total.
+pub(crate) const MAX_TOTAL_OPS: usize = 1 << 27;
+
+/// The error for a font whose charstrings exceed [`MAX_TOTAL_OPS`] together.
+pub(crate) const TOTAL_OPS_EXCEEDED: &str = "charstrings exceed the font-wide operation budget";
+
 pub(crate) struct Interp<'a> {
     gsubrs: &'a [&'a [u8]],
     lsubrs: Option<&'a [&'a [u8]]>,
@@ -143,6 +152,11 @@ impl<'a> Interp<'a> {
             depth: 0,
             ops: 0,
         }
+    }
+
+    /// Operators and operands executed so far by this interpreter.
+    pub fn ops_used(&self) -> usize {
+        self.ops
     }
 
     /// Interpret one charstring; the main one when `sub` is false.

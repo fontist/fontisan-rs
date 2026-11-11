@@ -441,6 +441,12 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
             let src = if is_variable {
                 instanced = write_font(&tables, sfnt_version);
                 &instanced[..]
+            } else if format == Some(Format::Woff) {
+                // `raw` is empty for a WOFF1 source (tables come from the decoder);
+                // encode the decoded sfnt, not nothing.
+                instanced = crate::woff::decode_woff(input)
+                    .map_err(|e| ConvertError::transform(e.to_string()))?;
+                &instanced[..]
             } else {
                 raw
             };

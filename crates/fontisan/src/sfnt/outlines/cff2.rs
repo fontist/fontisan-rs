@@ -107,7 +107,19 @@ pub(super) fn glyphs(data: &[u8]) -> Result<Vec<&[u8]>, Error> {
     (0..count)
         .map(|i| {
             let (a, b) = (read(i)?, read(i + 1)?);
-            slice(data, base + a, b - a)
+            // Offsets are up to 255 bytes wide: the sums overflow i64 without checks
+            // (a panic in a debug build, a wrapped slice in release).
+            let overflow = || {
+                Error::new(
+                    ErrorClass::Truncated,
+                    format!("CharString offsets {a}..{b} overflow"),
+                )
+            };
+            slice(
+                data,
+                base.checked_add(a).ok_or_else(overflow)?,
+                b.checked_sub(a).ok_or_else(overflow)?,
+            )
         })
         .collect()
 }
@@ -115,6 +127,19 @@ pub(super) fn glyphs(data: &[u8]) -> Result<Vec<&[u8]>, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A CharStrings INDEX with 8-byte offsets near i64::MAX must fail, not overflow.
+    #[test]
+    fn huge_offsets_fail_without_overflow() {
+        for (first, second) in [(i64::MAX, 0), (0, i64::MIN), (i64::MIN, i64::MAX)] {
+            let mut d = vec![2, 0, 5, 0, 3, 139 + 8, 139 + 8, 17];
+            d.extend_from_slice(&1u32.to_be_bytes()); // count
+            d.push(8); // offSize
+            d.extend_from_slice(&first.to_be_bytes());
+            d.extend_from_slice(&second.to_be_bytes());
+            assert!(glyphs(&d).is_err(), "{first} {second}");
+        }
+    }
 
     /// fuzz finding: CharStrings INDEX with count 0xFFFFFFFF and offSize 0 never ended.
     #[test]
