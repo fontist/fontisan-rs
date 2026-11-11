@@ -12,10 +12,18 @@ struct Entry {
     checksum: u32,
 }
 
-/// Decode a WOFF 1.0 file to sfnt bytes. Table payloads (and checksums) are
-/// the original ones; the sfnt is laid out with 4-byte aligned tables in
-/// directory order.
-pub fn decode_woff(data: &[u8]) -> Result<Vec<u8>> {
+/// `(tag, table bytes)` in directory order.
+pub(crate) type RawTables = Vec<([u8; 4], Vec<u8>)>;
+
+/// Validated header and table directory of a WOFF 1.0 file.
+struct Parsed {
+    flavor: u32,
+    entries: Vec<Entry>,
+    /// Size of the decoded sfnt (header, directory and 4-byte aligned tables).
+    total: u64,
+}
+
+fn parse(data: &[u8]) -> Result<Parsed> {
     let mut r = Reader::new(data);
     if r.u32()? != SIGNATURE {
         return err("not a WOFF file (bad signature)");
@@ -65,10 +73,59 @@ pub fn decode_woff(data: &[u8]) -> Result<Vec<u8>> {
     if entries.windows(2).any(|w| w[0].tag >= w[1].tag) {
         return err("table directory not sorted by unique tag");
     }
+    Ok(Parsed {
+        flavor,
+        entries,
+        total,
+    })
+}
 
+/// Inflate one zlib-compressed table into `buf` (exactly `buf.len()` bytes).
+fn inflate_into(src: &[u8], e: &Entry, buf: &mut [u8]) -> Result<()> {
+    let want = e.orig_length as usize;
+    let (status, _, written) = miniz_oxide::inflate::core::decompress(
+        &mut miniz_oxide::inflate::core::DecompressorOxide::new(),
+        src,
+        buf,
+        0,
+        miniz_oxide::inflate::core::inflate_flags::TINFL_FLAG_PARSE_ZLIB_HEADER
+            | miniz_oxide::inflate::core::inflate_flags::TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF,
+    );
+    if status != miniz_oxide::inflate::TINFLStatus::Done {
+        return Err(super::Error("zlib stream is corrupt or too long".into()));
+    }
+    if written != want {
+        return err("inflated size does not match origLength");
+    }
+    Ok(())
+}
+
+fn compressed<'a>(data: &'a [u8], e: &Entry) -> &'a [u8] {
+    let start = e.offset as usize;
+    &data[start..start + e.comp_length as usize]
+}
+
+/// Deflate cannot exceed ~1032:1, so a larger claim is a lie that would otherwise
+/// reserve and zero up to MAX_OUTPUT before the stream fails.
+fn check_ratio(e: &Entry) -> Result<()> {
+    if u64::from(e.orig_length) > u64::from(e.comp_length) * 1100 + 1024 {
+        return err("implausible compression ratio");
+    }
+    Ok(())
+}
+
+/// Decode a WOFF 1.0 file to sfnt bytes. Table payloads (and checksums) are
+/// the original ones; the sfnt is laid out with 4-byte aligned tables in
+/// directory order.
+pub fn decode_woff(data: &[u8]) -> Result<Vec<u8>> {
+    let Parsed {
+        flavor,
+        entries,
+        total,
+    } = parse(data)?;
     let mut out = Vec::with_capacity(total as usize);
-    out.extend_from_slice(&offset_table(flavor, num_tables));
-    let mut table_offset = 12 + 16 * u64::from(num_tables);
+    out.extend_from_slice(&offset_table(flavor, entries.len() as u16));
+    let mut table_offset = 12 + 16 * entries.len() as u64;
     for e in &entries {
         out.extend_from_slice(&e.tag.to_be_bytes());
         out.extend_from_slice(&e.checksum.to_be_bytes());
@@ -77,40 +134,43 @@ pub fn decode_woff(data: &[u8]) -> Result<Vec<u8>> {
         table_offset += round4(u64::from(e.orig_length));
     }
     for e in &entries {
-        let start = e.offset as usize;
-        let src = &data[start..start + e.comp_length as usize];
+        let src = compressed(data, e);
         if e.comp_length < e.orig_length {
             // Inflate straight into `out`: a separate `Vec` plus the copy into `out`
             // tripled the peak resident size of a decompression-bomb table.
+            check_ratio(e)?;
             let start = out.len();
-            let want = e.orig_length as usize;
-            // Deflate cannot exceed ~1032:1, so a larger claim is a lie that would
-            // otherwise reserve and zero up to MAX_OUTPUT before the stream fails.
-            if u64::from(e.orig_length) > u64::from(e.comp_length) * 1100 + 1024 {
-                return err("implausible compression ratio");
-            }
-            out.resize(start + want, 0);
-            let mut state = miniz_oxide::inflate::core::DecompressorOxide::new();
-            let (status, _, written) = miniz_oxide::inflate::core::decompress(
-                &mut state,
-                src,
-                &mut out[start..],
-                0,
-                miniz_oxide::inflate::core::inflate_flags::TINFL_FLAG_PARSE_ZLIB_HEADER
-                    | miniz_oxide::inflate::core::inflate_flags::TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF,
-            );
-            if status != miniz_oxide::inflate::TINFLStatus::Done {
-                return Err(super::Error("zlib stream is corrupt or too long".into()));
-            }
-            if written != want {
-                return err("inflated size does not match origLength");
-            }
+            out.resize(start + e.orig_length as usize, 0);
+            inflate_into(src, e, &mut out[start..])?;
         } else {
             out.extend_from_slice(src);
         }
         out.resize(round4(out.len() as u64) as usize, 0);
     }
     Ok(out)
+}
+
+/// The sfnt version (flavor) and `(tag, table bytes)` of a WOFF 1.0 file, each table
+/// inflated into its own buffer. Equal to reading the tables out of [`decode_woff`]'s
+/// output, without materialising that output beside them (which doubled the peak).
+pub(crate) fn decode_tables(data: &[u8]) -> Result<(u32, RawTables)> {
+    let Parsed {
+        flavor, entries, ..
+    } = parse(data)?;
+    let mut tables = Vec::with_capacity(entries.len());
+    for e in &entries {
+        let src = compressed(data, e);
+        let table = if e.comp_length < e.orig_length {
+            check_ratio(e)?;
+            let mut buf = vec![0u8; e.orig_length as usize];
+            inflate_into(src, e, &mut buf)?;
+            buf
+        } else {
+            src.to_vec()
+        };
+        tables.push((e.tag.to_be_bytes(), table));
+    }
+    Ok((flavor, tables))
 }
 
 #[cfg(test)]
@@ -141,6 +201,16 @@ mod tests {
         let z = miniz_oxide::deflate::compress_to_vec_zlib(&plain, 6);
         let sfnt = decode_woff(&woff_with(&z, plain.len() as u32)).unwrap();
         assert_eq!(&sfnt[12 + 16..12 + 16 + plain.len()], &plain[..]);
+    }
+
+    #[test]
+    fn decode_tables_equals_the_tables_of_the_decoded_sfnt() {
+        let plain: Vec<u8> = (0..1001u32).map(|i| (i % 7) as u8).collect();
+        let z = miniz_oxide::deflate::compress_to_vec_zlib(&plain, 6);
+        let file = woff_with(&z, plain.len() as u32);
+        let (flavor, tables) = super::decode_tables(&file).unwrap();
+        assert_eq!(flavor, 0x0001_0000);
+        assert_eq!(tables, vec![(*b"glyf", plain)]);
     }
 
     #[test]

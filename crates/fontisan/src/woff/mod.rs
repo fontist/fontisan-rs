@@ -11,6 +11,7 @@ pub(crate) use woff2::{KNOWN_TAGS, brotli_inflate, triplet_decode};
 
 use std::fmt;
 
+pub(crate) use woff1::decode_tables as decode_woff_tables;
 pub use woff1::decode_woff;
 pub use woff2::{
     decode_woff2, decode_woff2_collection, decode_woff2_ruby_padding, is_woff2_collection,

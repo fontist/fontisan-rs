@@ -333,11 +333,8 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
     let sfnt_bytes: Vec<u8>;
     let raw: &[u8] = match format {
         Some(Format::Ttf | Format::Otf) => input,
-        Some(Format::Woff) => {
-            sfnt_bytes = crate::woff::decode_woff(input)
-                .map_err(|e| ConvertError::transform(e.to_string()))?;
-            &sfnt_bytes
-        }
+        // The tables come straight out of the decoder: no intermediate sfnt beside them.
+        Some(Format::Woff) => &[],
         Some(Format::Woff2) => {
             // Ruby's own WOFF2 rebuild (padding, flag RLE, table order), shared with reads.
             sfnt_bytes = crate::sfnt::woff2_view::single(input)
@@ -351,7 +348,12 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
             ));
         }
     };
-    let (sfnt_version, tables) = tables_of(raw)?;
+    let (sfnt_version, tables) = if format == Some(Format::Woff) {
+        crate::woff::decode_woff_tables(input)
+            .map_err(|e| ConvertError::transform(e.to_string()))?
+    } else {
+        tables_of(raw)?
+    };
     let is_variable = has(&tables, b"fvar");
 
     // 1i-instance: a variable font goes through instancing at its default
