@@ -32,7 +32,9 @@ fn otto_empty_cff_row_reports_corrupted_table() {
     let faces = fontisan::read::read(bytes, opts).expect("read");
     let json = faces[0].render();
     assert!(
-        json.contains(r#"{"tag":"CFF ","length":null,"sha256":null,"error":"Fontisan::CorruptedTableError"}"#),
+        json.contains(
+            r#"{"tag":"CFF ","length":null,"sha256":null,"error":"Fontisan::CorruptedTableError"}"#
+        ),
         "{json}"
     );
     assert!(json.contains(r#"{"tag":"DSIG","length":0,"#), "{json}");

@@ -197,6 +197,9 @@ fn build(tables: &Tables, glyph_ids: &[u32], profile: &str) -> Result<Vec<u8>, S
         let Some(data) = find(tables, tag) else {
             continue;
         };
+        // `font.table(tag)` parses the table before it is subset; a body too short for
+        // its header leaks BinData's EOFError (not wrapped in SubsettingError).
+        parse_like_ruby(tag, data).map_err(|e| SubsetError::new(e.class.ruby_name(), e.message))?;
         let sub = strategy(tables, &mapping, &mut st, tag, data, num_glyphs).map_err(|e| {
             if e.class == UNSUPPORTED_CLASS {
                 e
@@ -212,6 +215,18 @@ fn build(tables: &Tables, glyph_ids: &[u32], profile: &str) -> Result<Vec<u8>, S
     let is_cff = out.iter().any(|(t, _)| t == b"CFF " || t == b"CFF2");
     let version = if is_cff { 0x4F54_544F } else { 0x0001_0000 };
     Ok(write_font(&out, version))
+}
+
+/// The parse `font.table(tag)` does for the profile tables the builder does not otherwise
+/// parse (head, hhea and maxp are checked up front). Only the failure matters here.
+fn parse_like_ruby(tag: &str, data: &[u8]) -> Result<(), sfnt::Error> {
+    match tag {
+        "name" => sfnt::Name::parse(data).map(|_| ()),
+        "OS/2" => sfnt::Os2::parse(data).map(|_| ()),
+        "post" => sfnt::Post::parse(data).map(|_| ()),
+        "GSUB" | "GPOS" => sfnt::LayoutTable::from_bytes(data).map(|_| ()),
+        _ => Ok(()),
+    }
 }
 
 fn tag_bytes(tag: &str) -> [u8; 4] {
@@ -578,7 +593,7 @@ mod tests {
                 (b"hmtx", vec![0; 4]),
                 (b"glyf", vec![0; 12]),
                 (b"loca", vec![0, 0, 0, 6]),
-                (b"name", vec![1; pad]),
+                (b"prep", vec![1; pad]),
             ]);
             let enc = crate::convert::woff2::encode_woff2_with_quality(&sfnt, Some(0), 1).unwrap();
             let mut cut = enc.clone();
