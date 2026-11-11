@@ -180,6 +180,7 @@ pub(crate) fn convert(tables: &Tables) -> Result<Tables, ConvertError> {
     let mut glyf: Vec<u8> = vec![];
     let mut offsets = Vec::with_capacity(n + 1);
     let (mut max_points, mut max_contours) = (0usize, 0usize);
+    let mut total_ops = crate::t2interp::MAX_TOTAL_OPS;
     for (gid, cs) in cff.charstrings.iter().enumerate() {
         offsets.push(glyf.len());
         if !cff.has_private {
@@ -187,6 +188,9 @@ pub(crate) fn convert(tables: &Tables) -> Result<Tables, ConvertError> {
         }
         let mut it = Interp::new(&cff.global_subrs, cff.local_subrs.as_deref());
         it.run_main(cs).map_err(|e| glyph_error(&e, gid))?;
+        total_ops = total_ops
+            .checked_sub(it.ops_used())
+            .ok_or_else(|| glyph_error(crate::t2interp::TOTAL_OPS_EXCEEDED, gid))?;
         if it.path.is_empty() {
             continue;
         }

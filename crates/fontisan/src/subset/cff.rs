@@ -42,6 +42,7 @@ pub(super) fn subset(
     // Ruby), but only the glyphs `filter_ufo_glyphs!` keeps hold their outline: a font of
     // thousands of glyphs with a large outline each must not be held whole.
     let mut all: Vec<Glyph> = Vec::with_capacity(num_glyphs as usize);
+    let mut total_ops = crate::t2interp::MAX_TOTAL_OPS;
     let mut seen = std::collections::HashSet::with_capacity(num_glyphs as usize);
     for gid in 0..num_glyphs as usize {
         let key = match names.get(gid) {
@@ -59,6 +60,12 @@ pub(super) fn subset(
                 it.run_main(cs).map_err(|e| {
                     SubsetError::corrupted(format!(
                         "Failed to get CharString for glyph {gid}: Failed to parse CharString: {e}"
+                    ))
+                })?;
+                total_ops = total_ops.checked_sub(it.ops_used()).ok_or_else(|| {
+                    SubsetError::corrupted(format!(
+                        "Failed to get CharString for glyph {gid}: Failed to parse CharString: {}",
+                        crate::t2interp::TOTAL_OPS_EXCEEDED
                     ))
                 })?;
                 if mapping.new_id(gid as u32).is_some() || key == ".notdef" {

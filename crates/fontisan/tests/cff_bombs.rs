@@ -190,3 +190,32 @@ fn subset_does_not_retain_the_outlines_of_dropped_glyphs() {
     r.expect("subset");
     assert!(peak < 64 << 20, "peak {} MiB", peak >> 20);
 }
+
+/// `n` glyphs that each run about a million no-op operators through one shared subr.
+fn nop_font(n: usize) -> Vec<u8> {
+    let mut sub = vec![15u8; 1_000_000];
+    sub.push(11);
+    font(n as u16, &calls_subr0(n), &[sub])
+}
+
+#[test]
+fn total_charstring_work_is_bounded_per_font() {
+    let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let f = nop_font(200); // 200 M operators if unbounded
+    let t = std::time::Instant::now();
+    let e = fontisan::convert::convert(&f, fontisan::convert::Target::Ttf, 0)
+        .expect_err("a font-wide budget stops it");
+    assert!(e.message.contains("operation budget"), "{}", e.message);
+    let e = fontisan::subset::subset(&f, &[1], "web").expect_err("and the subsetter");
+    assert!(e.message.contains("operation budget"), "{}", e.message);
+    assert!(t.elapsed().as_secs() < 60, "took {:?}", t.elapsed());
+}
+
+#[test]
+fn a_font_inside_the_budget_still_converts_glyph_by_glyph() {
+    let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let f = nop_font(20);
+    // Past the charstrings the rebuilt font lacks `post`; that error is not the budget.
+    let e = fontisan::convert::convert(&f, fontisan::convert::Target::Ttf, 0).unwrap_err();
+    assert!(!e.message.contains("operation budget"), "{}", e.message);
+}
