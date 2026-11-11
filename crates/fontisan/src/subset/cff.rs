@@ -38,13 +38,17 @@ pub(super) fn subset(
     let metrics = find(tables, "hmtx").and_then(|raw| hmtx_metrics(tables, raw, num_glyphs).ok());
 
     // FromBinData.extract_cff_glyphs: every source glyph, in gid order.
+    // Every glyph is still interpreted (a bad charstring anywhere fails the subset, like
+    // Ruby), but only the glyphs `filter_ufo_glyphs!` keeps hold their outline: a font of
+    // thousands of glyphs with a large outline each must not be held whole.
     let mut all: Vec<Glyph> = Vec::with_capacity(num_glyphs as usize);
+    let mut seen = std::collections::HashSet::with_capacity(num_glyphs as usize);
     for gid in 0..num_glyphs as usize {
         let key = match names.get(gid) {
             Some(n) if !n.is_empty() => n.clone(),
             _ => format!("gid{gid}"),
         };
-        if all.iter().any(|g| g.key == key) {
+        if !seen.insert(key.clone()) {
             return Err(SubsetError::new("Fontisan::Ufo::GlyphExistsError", key));
         }
         let width = metrics.as_ref().and_then(|m| m.get(gid)).map_or(0, |m| m.0);
@@ -57,7 +61,9 @@ pub(super) fn subset(
                         "Failed to get CharString for glyph {gid}: Failed to parse CharString: {e}"
                     ))
                 })?;
-                path = it.path;
+                if mapping.new_id(gid as u32).is_some() || key == ".notdef" {
+                    path = it.path;
+                }
             }
         }
         all.push(Glyph { key, width, path });
