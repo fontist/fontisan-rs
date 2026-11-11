@@ -146,15 +146,30 @@ pub struct FontisanRequest {
 #[derive(Debug)]
 pub struct FfiError {
     pub status: FontisanStatus,
+    pub kind: crate::ErrorKind,
     pub message: String,
 }
 
 impl FfiError {
+    /// The kind defaults from the status; use [`FfiError::with_kind`] for engine errors.
     pub fn new(status: FontisanStatus, message: impl Into<String>) -> Self {
+        use crate::ErrorKind as K;
+        let kind = match status {
+            FontisanStatus::Ok => K::None,
+            FontisanStatus::InvalidArgument => K::InvalidArgument,
+            FontisanStatus::Unsupported => K::Unsupported,
+            _ => K::Other,
+        };
         Self {
             status,
+            kind,
             message: message.into(),
         }
+    }
+
+    pub fn with_kind(mut self, kind: crate::ErrorKind) -> Self {
+        self.kind = kind;
+        self
     }
 }
 
@@ -233,7 +248,7 @@ unsafe fn dispatch(req: *const FontisanRequest) -> Result<Vec<u8>, FfiError> {
             ts.copy_from_slice(&input[8..16]);
             let font = &input[16..];
             let failed = |e: crate::convert::ConvertError| {
-                FfiError::new(FontisanStatus::ConvertFailed, e.to_string())
+                FfiError::new(FontisanStatus::ConvertFailed, e.to_string()).with_kind(e.kind())
             };
             if req.op == OP_CONVERT {
                 let target = crate::convert::Target::from_code(param).ok_or_else(|| {
@@ -301,8 +316,9 @@ unsafe fn dispatch(req: *const FontisanRequest) -> Result<Vec<u8>, FfiError> {
                     ([c[0], c[1], c[2], c[3]], f64::from(raw) / 65536.0)
                 })
                 .collect();
-            crate::instance::instance(&input[list_end..], &coords)
-                .map_err(|e| FfiError::new(FontisanStatus::ConvertFailed, e.to_string()))
+            crate::instance::instance(&input[list_end..], &coords).map_err(|e| {
+                FfiError::new(FontisanStatus::ConvertFailed, e.to_string()).with_kind(e.kind())
+            })
         }
         OP_SUBSET => {
             if req.input.is_null() && req.input_len != 0 {
@@ -346,8 +362,9 @@ unsafe fn dispatch(req: *const FontisanRequest) -> Result<Vec<u8>, FfiError> {
                 .chunks_exact(4)
                 .map(|c| u32::from_be_bytes([c[0], c[1], c[2], c[3]]))
                 .collect();
-            crate::subset::subset(&input[ids_end..], &gids, profile)
-                .map_err(|e| FfiError::new(FontisanStatus::ConvertFailed, e.to_string()))
+            crate::subset::subset(&input[ids_end..], &gids, profile).map_err(|e| {
+                FfiError::new(FontisanStatus::ConvertFailed, e.to_string()).with_kind(e.kind())
+            })
         }
         OP_READ | OP_AUDIT | OP_SCAN | OP_AUDIT_DIR => {
             if req.input.is_null() && req.input_len != 0 {
@@ -396,11 +413,16 @@ pub unsafe extern "C" fn fontisan_call(
         return FontisanStatus::NullPointer as i32;
     }
     let outcome = guard(|| unsafe { dispatch(req) });
-    let (status, message, payload) = match outcome {
-        Ok(payload) => (FontisanStatus::Ok, String::new(), payload),
-        Err(e) => (e.status, e.message, Vec::new()),
+    let (status, kind, message, payload) = match outcome {
+        Ok(payload) => (
+            FontisanStatus::Ok,
+            crate::ErrorKind::None,
+            String::new(),
+            payload,
+        ),
+        Err(e) => (e.status, e.kind, e.message, Vec::new()),
     };
-    unsafe { *out = result::into_raw(status, &message, payload) };
+    unsafe { *out = result::into_raw(status, kind, &message, payload) };
     status as i32
 }
 

@@ -42,6 +42,13 @@ impl ErrorClass {
     }
 }
 
+impl ErrorClass {
+    /// The machine-readable kind of this class.
+    pub fn kind(self) -> crate::ErrorKind {
+        crate::ErrorKind::from_class(self.ruby_name())
+    }
+}
+
 /// A read failure: class, message and the (at most one) cause.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Error {
@@ -51,6 +58,10 @@ pub struct Error {
 }
 
 impl Error {
+    /// The machine-readable kind; switch on this, not on the message.
+    pub fn kind(&self) -> crate::ErrorKind {
+        self.class.kind()
+    }
     pub(crate) fn new(class: ErrorClass, message: impl Into<String>) -> Self {
         Self {
             class,

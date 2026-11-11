@@ -33,7 +33,7 @@ fn layout_matches_header_file() {
     assert_eq!(size_of::<FontisanHeader>(), 16);
     if cfg!(target_pointer_width = "64") {
         assert_eq!(size_of::<FontisanRequest>(), 40);
-        assert_eq!(size_of::<FontisanResult>(), 64);
+        assert_eq!(size_of::<FontisanResult>(), 72);
     }
     assert_eq!(MAGIC, 0x4E41_5346);
     assert_eq!(fontisan_abi_version(), ABI_VERSION);

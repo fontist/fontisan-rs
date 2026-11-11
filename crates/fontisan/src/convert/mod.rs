@@ -35,6 +35,10 @@ pub struct ConvertError {
 }
 
 impl ConvertError {
+    /// The machine-readable kind; switch on this, not on the message.
+    pub fn kind(&self) -> crate::ErrorKind {
+        crate::ErrorKind::from_class(self.class)
+    }
     pub(crate) fn new(class: &'static str, message: impl Into<String>) -> Self {
         Self {
             class,

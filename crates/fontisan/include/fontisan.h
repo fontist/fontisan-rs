@@ -29,6 +29,25 @@ enum {
   FONTISAN_E_UNSUPPORTED = 10
 };
 
+/* Error kinds: fontisan_result.error_kind, 0 on success. Switch on this, not on the message.
+ * Append only; values never change. Added after ABI 1 shipped without a bump: the result block
+ * is engine-allocated and read-only, so callers built against the 64-byte result still work;
+ * header.struct_size >= 72 (64-bit) says the field is present. */
+enum {
+  FONTISAN_KIND_NONE = 0,
+  FONTISAN_KIND_INVALID_FONT = 1,        /* not a readable font / malformed structure */
+  FONTISAN_KIND_INVALID_AXIS = 2,        /* unknown variation axis tag */
+  FONTISAN_KIND_INVALID_COORDINATES = 3, /* axis value out of range or not finite */
+  FONTISAN_KIND_IO = 4,                  /* file-system / I/O failure */
+  FONTISAN_KIND_UNSUPPORTED = 5,         /* not served natively; caller serves it */
+  FONTISAN_KIND_SUBSETTING = 6,
+  FONTISAN_KIND_CORRUPTED_TABLE = 7,
+  FONTISAN_KIND_MISSING_TABLE = 8,
+  FONTISAN_KIND_INVALID_ARGUMENT = 9,
+  FONTISAN_KIND_TRUNCATED = 10,          /* data ended early (EOFError / IOError) */
+  FONTISAN_KIND_OTHER = 11               /* Fontisan::Error, panic, ...: use the message */
+};
+
 #define FONTISAN_OP_ECHO 0u
 /* input = 16-byte prefix (u32 BE target 0 ttf/1 otf/2 woff/3 woff2, u32 reserved,
  * i64 BE timestamp) + font bytes; payload = converted font. Failure message is
@@ -100,6 +119,8 @@ typedef struct {
   fontisan_error_row error;
   const uint8_t *payload;
   size_t payload_len;
+  int32_t error_kind; /* FONTISAN_KIND_*; present when header.struct_size >= 72 */
+  int32_t reserved;
 } fontisan_result;
 
 uint32_t fontisan_abi_version(void);
