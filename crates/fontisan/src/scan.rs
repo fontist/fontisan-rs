@@ -56,7 +56,7 @@ pub struct RowErrors {
     pub collection_member: Option<ErrInfo>,
 }
 
-/// The six name fields, in [`NAME_FIELDS`] order; empty when the font has no
+/// The six name fields, in `NAME_FIELDS` order; empty when the font has no
 /// `name` table (Ruby `{}`).
 pub type NameMap = Vec<(&'static str, Option<String>)>;
 

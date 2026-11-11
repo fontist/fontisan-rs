@@ -3,7 +3,7 @@
 //! * Every struct crossing the boundary starts with a [`FontisanHeader`]
 //!   (magic, ABI version, struct size). A stale or foreign caller fails loudly
 //!   with a non-zero status and an error row; nothing is guessed.
-//! * Memory model: see [`result`]. One call allocates, one call frees.
+//! * Memory model: see the `result` module. One call allocates, one call frees.
 //! * Panics never cross the boundary: [`guard`] turns them into an error row.
 //!   This relies on `panic = "unwind"` in the release profile.
 #![allow(unsafe_code)]
@@ -386,7 +386,7 @@ pub extern "C" fn fontisan_abi_version() -> u32 {
 /// [`fontisan_result_free`]. `*out` is null only when `out` itself is null.
 ///
 /// # Safety
-/// `req` per [`dispatch`]; `out` must be null or writable.
+/// `req` per `dispatch`; `out` must be null or writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn fontisan_call(
     req: *const FontisanRequest,
