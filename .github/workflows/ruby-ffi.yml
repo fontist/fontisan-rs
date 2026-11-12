@@ -1,0 +1,24 @@
+name: ruby ffi
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  c-abi:
+    name: c abi (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo xtask corpus-fetch
+      - name: Build release cdylib and test fontisan.h ABI
+        run: scripts/c-abi-test.sh
+        env:
+          PROFILE_FLAG: --release
+          PROFILE_DIR: release

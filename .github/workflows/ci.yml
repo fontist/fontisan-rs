@@ -123,3 +123,22 @@ jobs:
         with:
           name: fuzz-crash-${{ matrix.target }}
           path: fuzz/artifacts/${{ matrix.target }}
+
+  engine-repin:
+    name: Notify the Ruby face of a verified engine commit
+    needs: [test, fmt, deny, check-no-c, xtask, asan, fuzz]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # The face owns the pin update, gem builds and parity-face.yml call.
+      # A maintainer must configure FONTIST_CI_PAT_TOKEN for cross-repo dispatch.
+      - name: Dispatch engine-repin to fontisan-ruby
+        env:
+          GH_TOKEN: ${{ secrets.FONTIST_CI_PAT_TOKEN }}
+          ENGINE_SHA: ${{ github.sha }}
+        run: |
+          jq -n --arg sha "$ENGINE_SHA" \
+            '{event_type: "engine-repin", client_payload: {engine_sha: $sha}}' \
+            | gh api --method POST repos/fontist/fontisan-ruby/dispatches --input -
