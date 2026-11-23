@@ -114,6 +114,20 @@ fn glyph_ids_raises_the_facade_error_when_nothing_matches() {
 }
 
 #[test]
+fn glyph_ids_surfaces_the_facade_class_for_unreadable_fonts() {
+    // A truncated sfnt: the facade's glyph_ids raises the canonical
+    // RuntimeError("Invalid TrueTypeFont file: ...") — the malformed parity
+    // surface — not a generic Fontisan::Error wrapper.
+    let mut font = test_ttf().expect("corpus present");
+    font.truncate(24);
+    let (status, out) = gids(&font, "TestTTF.ttf", &[46]);
+    assert_eq!(status, FontisanStatus::ConvertFailed as i32);
+    let r = unsafe { out.as_ref().expect("error on failure") };
+    assert!(message(r).starts_with("RuntimeError: Invalid TrueTypeFont file:"));
+    unsafe { fontisan_result_free(out) };
+}
+
+#[test]
 fn glyph_ids_loudly_rejects_malformed_input() {
     // Truncated before the codepoint header.
     let (status, out) = call(&request(OP_GLYPH_IDS, &[0, 0, 0, 3]));
