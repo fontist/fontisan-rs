@@ -113,6 +113,10 @@ bench = false
 [[bin]]
 name = "ffi_subset"
 path = "fuzz_targets/ffi_subset.rs"
+
+[[bin]]
+name = "ffi_glyph_ids"
+path = "fuzz_targets/ffi_glyph_ids.rs"
 test = false
 doc = false
 bench = false

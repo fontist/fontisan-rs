@@ -242,8 +242,8 @@ fn call_op(op: u32, flags: u32, input: &[u8]) {
 /// well-formed prefix has rotted cannot pass by only ever hitting the error path.
 ///
 /// OP_INSTANCE is driven by the small variable-font seed `vf-mini-*.ttf`.
-pub static OK_BY_OP: [std::sync::atomic::AtomicUsize; 12] =
-    [const { std::sync::atomic::AtomicUsize::new(0) }; 12];
+pub static OK_BY_OP: [std::sync::atomic::AtomicUsize; 13] =
+    [const { std::sync::atomic::AtomicUsize::new(0) }; 13];
 
 fn be32(v: u32) -> [u8; 4] {
     v.to_be_bytes()
@@ -334,6 +334,32 @@ pub fn ffi_subset(data: &[u8]) {
     }
     input.extend_from_slice(rest);
     call_op(ffi::OP_SUBSET, 0, &input);
+}
+
+pub fn ffi_glyph_ids(data: &[u8]) {
+    let (raw, s, rest) = split(data, 10);
+    if let Some(raw) = raw {
+        return call_op(ffi::OP_GLYPH_IDS, 0, raw);
+    }
+    let n = 1 + usize::from(sel(s, 1) % 8);
+    let name_len = usize::from(sel(s, 0) % 8); // some shorter than the rest, some valid names
+    let mut input = Vec::new();
+    input.extend(be32(name_len as u32));
+    input.extend_from_slice(&rest[..name_len.min(rest.len())]);
+    input.extend(be32(n as u32));
+    for i in 0..n {
+        // Mostly ASCII (present in the corpus cmaps) plus the occasional
+        // codepoint past Unicode, so the op both succeeds and fails on the
+        // same seeds.
+        let cp = if i % 3 == 2 {
+            u32::from(sel(s, 2 + i)) * 16_384
+        } else {
+            u32::from(sel(s, 2 + i)) % 128
+        };
+        input.extend(be32(cp));
+    }
+    input.extend_from_slice(rest);
+    call_op(ffi::OP_GLYPH_IDS, 0, &input);
 }
 
 pub fn ffi_instance(data: &[u8]) {
@@ -529,6 +555,7 @@ pub const OPS: &[(&str, u32, &str)] = &[
     ("OP_EXTRACT", ffi::OP_EXTRACT, "ffi_extract"),
     ("OP_WOFF2_ENCODE", ffi::OP_WOFF2_ENCODE, "ffi_woff2_encode"),
     ("OP_SUBSET", ffi::OP_SUBSET, "ffi_subset"),
+    ("OP_GLYPH_IDS", ffi::OP_GLYPH_IDS, "ffi_glyph_ids"),
     ("OP_INSTANCE", ffi::OP_INSTANCE, "ffi_instance"),
     ("OP_READ", ffi::OP_READ, "ffi_read"),
     ("OP_AUDIT", ffi::OP_AUDIT, "ffi_audit"),
@@ -560,4 +587,5 @@ pub const TARGETS: &[(&str, Body)] = &[
     ("ffi_scan", ffi_scan),
     ("ffi_audit_dir", ffi_audit_dir),
     ("ffi_header", ffi_header),
+    ("ffi_glyph_ids", ffi_glyph_ids),
 ];
