@@ -50,6 +50,10 @@ required-features = ["ffi"]
 workspace = true
 
 [[test]]
+name = "ffi_glyph_ids"
+required-features = ["ffi"]
+
+[[test]]
 name = "ffi_leak"
 required-features = ["ffi"]
 
