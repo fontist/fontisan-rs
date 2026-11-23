@@ -629,13 +629,9 @@ fn reconstruct_hmtx(data: &[u8], info: &FontInfo, out: &mut Vec<u8>) -> Result<u
         advances.push(r.u16()?);
     }
     let mut lsbs: Vec<i16> = Vec::with_capacity(ng);
-    for i in 0..ng {
+    for (i, x_min) in info.x_mins.iter().enumerate().take(ng) {
         let explicit = if i < nh { proportional } else { monospace };
-        lsbs.push(if explicit {
-            r.u16()? as i16
-        } else {
-            info.x_mins[i]
-        });
+        lsbs.push(if explicit { r.u16()? as i16 } else { *x_min });
     }
     let mut table = Vec::with_capacity(2 * ng + 2 * nh);
     for (i, lsb) in lsbs.iter().enumerate() {
