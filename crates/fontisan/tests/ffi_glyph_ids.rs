@@ -118,7 +118,9 @@ fn glyph_ids_surfaces_the_facade_class_for_unreadable_fonts() {
     // A truncated sfnt: the facade's glyph_ids raises the canonical
     // RuntimeError("Invalid TrueTypeFont file: ...") — the malformed parity
     // surface — not a generic Fontisan::Error wrapper.
-    let mut font = test_ttf().expect("corpus present");
+    let Some(mut font) = test_ttf() else {
+        return; // corpus() already printed the skip message
+    };
     font.truncate(24);
     let (status, out) = gids(&font, "TestTTF.ttf", &[46]);
     assert_eq!(status, FontisanStatus::ConvertFailed as i32);
