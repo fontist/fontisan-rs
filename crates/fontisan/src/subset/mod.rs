@@ -304,8 +304,12 @@ pub fn glyph_ids_for(
     codepoints: &[u32],
     name: &str,
 ) -> Result<Vec<u32>, SubsetError> {
+    // The facade's glyph_ids surfaces the load failure exactly as the read
+    // ops do (RuntimeError + "Invalid TrueTypeFont file: ..." for a truncated
+    // sfnt) — the generic Fontisan::Error wrapper would diverge from the Ruby
+    // tier's malformed parity surface.
     let font = sfnt::Font::from_bytes(input)
-        .map_err(|e| SubsetError::new("Fontisan::Error", e.to_string()))?;
+        .map_err(|e| SubsetError::new(e.class.ruby_name(), e.message.clone()))?;
     // Ruby's `gids_for` raises MissingTableError for an absent cmap (reference.rb).
     let map: std::collections::BTreeMap<u32, u32> = match font.cmap() {
         Ok(None) => {
