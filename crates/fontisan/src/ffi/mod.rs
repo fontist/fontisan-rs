@@ -21,7 +21,7 @@ pub use result::{FontisanErrorRow, FontisanResult};
 pub const MAGIC: u32 = u32::from_le_bytes(*b"FSAN");
 /// Bumped on any layout or semantics change. Callers compiled against another
 /// version are rejected.
-pub const ABI_VERSION: u32 = 1;
+pub const ABI_VERSION: u32 = 2;
 
 /// Status / error codes. Stable; append only.
 #[repr(i32)]
@@ -122,6 +122,12 @@ pub const OP_INSTANCE: u32 = 7;
 /// N u32 BE glyph ids, then the font bytes. Payload: the subset font. Failure
 /// status `ConvertFailed`, message `<ruby class>: <message>`.
 pub const OP_SUBSET: u32 = 6;
+/// Glyph ids kept for a set of codepoints (the facade's `glyph_ids`, #192
+/// gap 1). `input` = u32 BE basename length L, L UTF-8 basename bytes, u32 BE
+/// codepoint count N, N u32 BE codepoints, then the font bytes. Payload: N'
+/// u32 BE glyph ids (sorted, unique). Failure status `ConvertFailed`,
+/// message `<ruby class>: <message>`.
+pub const OP_GLYPH_IDS: u32 = 12;
 /// Read ops (card 1g-abi); payloads are packed JSON rows, see `read_ops`.
 /// Read: `input` = font bytes; `flags` = [`READ_FLAG_METADATA`] | [`READ_FLAG_LAZY`].
 pub const OP_READ: u32 = 8;
@@ -365,6 +371,55 @@ unsafe fn dispatch(req: *const FontisanRequest) -> Result<Vec<u8>, FfiError> {
             crate::subset::subset(&input[ids_end..], &gids, profile).map_err(|e| {
                 FfiError::new(FontisanStatus::ConvertFailed, e.to_string()).with_kind(e.kind())
             })
+        }
+        OP_GLYPH_IDS => {
+            if req.input.is_null() && req.input_len != 0 {
+                return Err(FfiError::new(
+                    FontisanStatus::InvalidArgument,
+                    "input is null with non-zero length",
+                ));
+            }
+            let input: &[u8] = if req.input_len == 0 {
+                &[]
+            } else {
+                unsafe { std::slice::from_raw_parts(req.input, req.input_len) }
+            };
+            let invalid = |m: &str| FfiError::new(FontisanStatus::InvalidArgument, m);
+            if input.len() < 8 {
+                return Err(invalid("input is shorter than the 8-byte header"));
+            }
+            let be = |at: usize| {
+                u32::from_be_bytes([input[at], input[at + 1], input[at + 2], input[at + 3]])
+            };
+            let name_len = be(0) as usize;
+            let mut at = 4 + name_len;
+            if at + 4 > input.len() {
+                return Err(invalid("input is shorter than the basename header"));
+            }
+            let name = String::from_utf8(input[4..at].to_vec())
+                .map_err(|_| invalid("basename is not UTF-8"))?;
+            let n = be(at) as usize;
+            at += 4;
+            let cps_end = n
+                .checked_mul(4)
+                .and_then(|b| b.checked_add(at))
+                .filter(|e| *e <= input.len())
+                .ok_or_else(|| invalid("codepoint list is longer than the input"))?;
+            let codepoints: Vec<u32> = input[at..cps_end]
+                .chunks_exact(4)
+                .map(|c| u32::from_be_bytes([c[0], c[1], c[2], c[3]]))
+                .collect();
+            crate::subset::glyph_ids_for(&input[cps_end..], &codepoints, &name)
+                .map(|gids| {
+                    let mut payload = Vec::with_capacity(gids.len() * 4);
+                    for gid in gids {
+                        payload.extend_from_slice(&gid.to_be_bytes());
+                    }
+                    payload
+                })
+                .map_err(|e| {
+                    FfiError::new(FontisanStatus::ConvertFailed, e.to_string()).with_kind(e.kind())
+                })
         }
         OP_READ | OP_AUDIT | OP_SCAN | OP_AUDIT_DIR => {
             if req.input.is_null() && req.input_len != 0 {

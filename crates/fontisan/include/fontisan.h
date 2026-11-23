@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define FONTISAN_MAGIC 0x4E415346u /* "FSAN" little-endian */
-#define FONTISAN_ABI_VERSION 1u
+#define FONTISAN_ABI_VERSION 2u
 
 enum {
   FONTISAN_OK = 0,
@@ -71,6 +71,11 @@ enum {
  * font. Failure message is "<ruby class>: <message>" with status
  * FONTISAN_E_CONVERT_FAILED. */
 #define FONTISAN_OP_SUBSET 6u
+/* Glyph ids kept for a set of codepoints (#192 gap 1). input = u32 BE basename length L, L UTF-8
+ * basename bytes, u32 BE codepoint count N, N u32 BE codepoints, then the font bytes. payload =
+ * N' u32 BE glyph ids (sorted, unique). Failure message is "<ruby class>: <message>" with status
+ * FONTISAN_E_CONVERT_FAILED. */
+#define FONTISAN_OP_GLYPH_IDS 12u
 
 /* Read-side ops. Every success payload is "packed rows": u32 BE row count, then per row a u32 BE
  * byte length and that many bytes of UTF-8 JSON (the facade's canonical documents).
