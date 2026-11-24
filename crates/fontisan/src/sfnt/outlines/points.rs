@@ -61,9 +61,9 @@ pub(super) fn decode_glyph(
     glyph_id: usize,
     depth: u8,
 ) -> Result<Option<GlyphOutline>, Error> {
-    let glyph = glyphs.get(glyph_id).ok_or_else(|| {
-        corrupted(format!("glyph id {glyph_id} is out of range"))
-    })?;
+    let glyph = glyphs
+        .get(glyph_id)
+        .ok_or_else(|| corrupted(format!("glyph id {glyph_id} is out of range")))?;
     if glyph.len() < 10 {
         return Ok(None);
     }
@@ -73,7 +73,9 @@ pub(super) fn decode_glyph(
         )));
     }
     let mut cursor = Cursor::new(glyph, 0);
-    let contours_count = cursor.i16().map_err(|e| read_failed("numberOfContours", e))?;
+    let contours_count = cursor
+        .i16()
+        .map_err(|e| read_failed("numberOfContours", e))?;
     if contours_count < 0 {
         return Ok(Some(decode_composite(glyphs, glyph_id, glyph, depth)?));
     }
@@ -82,7 +84,11 @@ pub(super) fn decode_glyph(
         .map_err(|_| corrupted(format!("glyph {glyph_id}: numberOfContours out of range")))?;
     let mut end_points = Vec::with_capacity(contours_count);
     for i in 0..contours_count {
-        let end = usize::from(cursor.u16().map_err(|e| read_failed("endPtsOfContours", e))?);
+        let end = usize::from(
+            cursor
+                .u16()
+                .map_err(|e| read_failed("endPtsOfContours", e))?,
+        );
         match end_points.last() {
             Some(&last) if end <= last => {
                 return Err(corrupted(format!(
@@ -94,8 +100,11 @@ pub(super) fn decode_glyph(
         end_points.push(end);
     }
     let point_count = end_points.last().copied().map_or(0, |e| e + 1);
-    let instruction_length =
-        usize::from(cursor.u16().map_err(|e| read_failed("instructionLength", e))?);
+    let instruction_length = usize::from(
+        cursor
+            .u16()
+            .map_err(|e| read_failed("instructionLength", e))?,
+    );
     cursor
         .skip(instruction_length)
         .map_err(|e| read_failed("instructions", e))?;
@@ -143,15 +152,21 @@ fn read_points(bytes: &[u8], count: usize) -> Result<Vec<Point>, String> {
     let mut xs = Vec::with_capacity(count);
     for &flag in &flags {
         if flag & FLAG_X_SHORT != 0 {
-            let byte = i32::from(*bytes.get(at).ok_or_else(|| {
-                "an x delta runs past the glyph".to_string()
-            })?);
+            let byte = i32::from(
+                *bytes
+                    .get(at)
+                    .ok_or_else(|| "an x delta runs past the glyph".to_string())?,
+            );
             at += 1;
-            x += if flag & FLAG_X_SAME_OR_POSITIVE != 0 { byte } else { -byte };
+            x += if flag & FLAG_X_SAME_OR_POSITIVE != 0 {
+                byte
+            } else {
+                -byte
+            };
         } else if flag & FLAG_X_SAME_OR_POSITIVE == 0 {
-            let pair = bytes.get(at..at + 2).ok_or_else(|| {
-                "an x delta runs past the glyph".to_string()
-            })?;
+            let pair = bytes
+                .get(at..at + 2)
+                .ok_or_else(|| "an x delta runs past the glyph".to_string())?;
             at += 2;
             x += i32::from(i16::from_be_bytes([pair[0], pair[1]]));
         }
@@ -161,15 +176,21 @@ fn read_points(bytes: &[u8], count: usize) -> Result<Vec<Point>, String> {
     let mut points = Vec::with_capacity(count);
     for (i, &flag) in flags.iter().enumerate() {
         if flag & FLAG_Y_SHORT != 0 {
-            let byte = i32::from(*bytes.get(at).ok_or_else(|| {
-                "a y delta runs past the glyph".to_string()
-            })?);
+            let byte = i32::from(
+                *bytes
+                    .get(at)
+                    .ok_or_else(|| "a y delta runs past the glyph".to_string())?,
+            );
             at += 1;
-            y += if flag & FLAG_Y_SAME_OR_POSITIVE != 0 { byte } else { -byte };
+            y += if flag & FLAG_Y_SAME_OR_POSITIVE != 0 {
+                byte
+            } else {
+                -byte
+            };
         } else if flag & FLAG_Y_SAME_OR_POSITIVE == 0 {
-            let pair = bytes.get(at..at + 2).ok_or_else(|| {
-                "a y delta runs past the glyph".to_string()
-            })?;
+            let pair = bytes
+                .get(at..at + 2)
+                .ok_or_else(|| "a y delta runs past the glyph".to_string())?;
             at += 2;
             y += i32::from(i16::from_be_bytes([pair[0], pair[1]]));
         }
@@ -194,8 +215,12 @@ fn decode_composite(
     let mut cursor = Cursor::new(glyph, 10);
     let mut contours: Vec<Contour> = Vec::new();
     loop {
-        let flags = cursor.u16().map_err(|e| read_failed("component flags", e))?;
-        let component_id = cursor.u16().map_err(|e| read_failed("component glyph index", e))?;
+        let flags = cursor
+            .u16()
+            .map_err(|e| read_failed("component flags", e))?;
+        let component_id = cursor
+            .u16()
+            .map_err(|e| read_failed("component glyph index", e))?;
         let args_are_words = flags & ARG_1_AND_2_ARE_WORDS != 0;
         let args_are_xy = flags & ARGS_ARE_XY_VALUES != 0;
         if !args_are_xy {
@@ -204,9 +229,7 @@ fn decode_composite(
             // from offsets; refuse it rather than guess.
             return Err(Error::new(
                 ErrorClass::Unsupported,
-                format!(
-                    "glyph {glyph_id}: point-matching composite components are not decoded"
-                ),
+                format!("glyph {glyph_id}: point-matching composite components are not decoded"),
             ));
         }
         let dx = if args_are_words {
@@ -225,17 +248,45 @@ fn decode_composite(
         let mut d = 1.0f64;
         let f2dot14 = |raw: i16| f64::from(raw) / f64::from(1 << 14);
         if flags & WE_HAVE_A_SCALE != 0 {
-            let scale = f2dot14(cursor.i16().map_err(|e| read_failed("component scale", e))?);
+            let scale = f2dot14(
+                cursor
+                    .i16()
+                    .map_err(|e| read_failed("component scale", e))?,
+            );
             a = scale;
             d = scale;
         } else if flags & WE_HAVE_AN_X_AND_Y_SCALE != 0 {
-            a = f2dot14(cursor.i16().map_err(|e| read_failed("component xscale", e))?);
-            d = f2dot14(cursor.i16().map_err(|e| read_failed("component yscale", e))?);
+            a = f2dot14(
+                cursor
+                    .i16()
+                    .map_err(|e| read_failed("component xscale", e))?,
+            );
+            d = f2dot14(
+                cursor
+                    .i16()
+                    .map_err(|e| read_failed("component yscale", e))?,
+            );
         } else if flags & WE_HAVE_A_TWO_BY_TWO != 0 {
-            a = f2dot14(cursor.i16().map_err(|e| read_failed("component transform a", e))?);
-            b = f2dot14(cursor.i16().map_err(|e| read_failed("component transform b", e))?);
-            c = f2dot14(cursor.i16().map_err(|e| read_failed("component transform c", e))?);
-            d = f2dot14(cursor.i16().map_err(|e| read_failed("component transform d", e))?);
+            a = f2dot14(
+                cursor
+                    .i16()
+                    .map_err(|e| read_failed("component transform a", e))?,
+            );
+            b = f2dot14(
+                cursor
+                    .i16()
+                    .map_err(|e| read_failed("component transform b", e))?,
+            );
+            c = f2dot14(
+                cursor
+                    .i16()
+                    .map_err(|e| read_failed("component transform c", e))?,
+            );
+            d = f2dot14(
+                cursor
+                    .i16()
+                    .map_err(|e| read_failed("component transform d", e))?,
+            );
         }
         if let Some(outline) = decode_glyph(glyphs, usize::from(component_id), depth + 1)? {
             for contour in outline.contours {
@@ -251,7 +302,9 @@ fn decode_composite(
                         }
                     })
                     .collect();
-                contours.push(Contour { points: transformed });
+                contours.push(Contour {
+                    points: transformed,
+                });
             }
         }
         if flags & MORE_COMPONENTS == 0 {
@@ -293,9 +346,21 @@ mod tests {
         assert_eq!(
             points,
             &[
-                Point { x: 0, y: -200, on_curve: true },
-                Point { x: 500, y: 700, on_curve: true },
-                Point { x: 0, y: -200, on_curve: true },
+                Point {
+                    x: 0,
+                    y: -200,
+                    on_curve: true
+                },
+                Point {
+                    x: 500,
+                    y: 700,
+                    on_curve: true
+                },
+                Point {
+                    x: 0,
+                    y: -200,
+                    on_curve: true
+                },
             ]
         );
     }
@@ -305,7 +370,10 @@ mod tests {
         let t = triangle();
         let glyphs: Vec<&[u8]> = vec![&[], &t];
         assert_eq!(decode_glyph(&glyphs, 0, 0).unwrap(), None);
-        assert_eq!(decode_glyph(&glyphs, 1, 0).unwrap().unwrap().contours.len(), 1);
+        assert_eq!(
+            decode_glyph(&glyphs, 1, 0).unwrap().unwrap().contours.len(),
+            1
+        );
     }
 
     #[test]
@@ -324,7 +392,10 @@ mod tests {
         let outline = decode_glyph(&glyphs, 0, 0).unwrap().unwrap();
         let points = &outline.contours[0].points;
         assert_eq!(
-            points.iter().map(|p| (p.x, p.y, p.on_curve)).collect::<Vec<_>>(),
+            points
+                .iter()
+                .map(|p| (p.x, p.y, p.on_curve))
+                .collect::<Vec<_>>(),
             vec![(10, 0, true), (30, 0, true), (60, 0, true)]
         );
     }
@@ -345,9 +416,30 @@ mod tests {
         let glyphs: Vec<&[u8]> = vec![&g];
         let outline = decode_glyph(&glyphs, 0, 0).unwrap().unwrap();
         let points = &outline.contours[0].points;
-        assert_eq!(points[0], Point { x: 0, y: 0, on_curve: true });
-        assert_eq!(points[1], Point { x: 100, y: 100, on_curve: false });
-        assert_eq!(points[2], Point { x: 100, y: 200, on_curve: true });
+        assert_eq!(
+            points[0],
+            Point {
+                x: 0,
+                y: 0,
+                on_curve: true
+            }
+        );
+        assert_eq!(
+            points[1],
+            Point {
+                x: 100,
+                y: 100,
+                on_curve: false
+            }
+        );
+        assert_eq!(
+            points[2],
+            Point {
+                x: 100,
+                y: 200,
+                on_curve: true
+            }
+        );
     }
 
     #[test]
@@ -372,7 +464,14 @@ mod tests {
             vec![(100, -150), (600, 750), (100, -150)]
         );
         let second = &outline.contours[1].points;
-        assert_eq!(second[0], Point { x: 40, y: -150, on_curve: true });
+        assert_eq!(
+            second[0],
+            Point {
+                x: 40,
+                y: -150,
+                on_curve: true
+            }
+        );
     }
 
     #[test]

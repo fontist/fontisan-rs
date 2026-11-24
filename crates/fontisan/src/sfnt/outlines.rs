@@ -13,8 +13,8 @@ mod points;
 
 use super::error::{Error, ErrorClass};
 use super::font::Font;
-use sha2::{Digest, Sha256};
 pub use points::{Contour, GlyphOutline, Point};
+use sha2::{Digest, Sha256};
 
 /// Which outline table family a font's glyphs come from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -56,7 +56,10 @@ impl Outlines<'_> {
             OutlineKind::Glyf => points::decode_glyph(&self.glyphs, glyph_id, 0),
             kind => Err(Error::new(
                 ErrorClass::Unsupported,
-                format!("{} outline points are not decoded (byte ranges only)", kind.as_str()),
+                format!(
+                    "{} outline points are not decoded (byte ranges only)",
+                    kind.as_str()
+                ),
             )),
         }
     }
