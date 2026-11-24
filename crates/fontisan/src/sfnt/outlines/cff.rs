@@ -68,11 +68,11 @@ pub(super) fn index(data: &[u8], start: usize) -> Result<Index, Error> {
     })
 }
 
-/// Operator 17 (CharStrings offset) in a CFF1 DICT, the operand Ruby stores.
-fn charstrings_offset(dict: &[u8]) -> Result<Option<i64>, Error> {
+/// Every `(operator, operand stack)` pair in a CFF1 DICT, in program order.
+fn dict_ops(dict: &[u8]) -> Result<Vec<(u32, Vec<i64>)>, Error> {
     let mut stack: Vec<i64> = vec![];
     let mut i = 0;
-    let mut found = None;
+    let mut found = Vec::new();
     while i < dict.len() {
         let b = dict[i];
         i += 1;
@@ -87,10 +87,7 @@ fn charstrings_offset(dict: &[u8]) -> Result<Option<i64>, Error> {
             } else {
                 u32::from(b)
             };
-            if op == 17 {
-                found = stack.first().copied();
-            }
-            stack.clear();
+            found.push((op, std::mem::take(&mut stack)));
             continue;
         }
         let need = |n: usize| {
@@ -139,17 +136,19 @@ fn charstrings_offset(dict: &[u8]) -> Result<Option<i64>, Error> {
     Ok(found)
 }
 
-pub(super) fn glyphs(data: &[u8]) -> Result<Vec<&[u8]>, Error> {
-    parse(data).map_err(|e| {
-        if e.class == ErrorClass::CorruptedTable && !e.message.starts_with("Failed to parse") {
-            corrupted(format!("Failed to parse CFF table: {}", e.message))
-        } else {
-            e
-        }
-    })
+/// Everything Type 2 interpretation needs beyond the charstring bytes.
+#[derive(Clone, Debug)]
+pub struct CffState<'a> {
+    /// The Global Subr INDEX entries, in order.
+    pub gsubrs: Vec<&'a [u8]>,
+    /// The face's Private DICT bytes, when the Top DICT names one.
+    pub private: Option<&'a [u8]>,
+    /// The Private DICT's local Subr INDEX entries, in order.
+    pub subrs: Vec<&'a [u8]>,
 }
 
-fn parse(data: &[u8]) -> Result<Vec<&[u8]>, Error> {
+/// Walks the whole CFF: the charstrings plus the Type 2 interpretation state.
+pub(crate) fn parse_all(data: &[u8]) -> Result<(Vec<&[u8]>, CffState<'_>), Error> {
     let h = take(data, 0, 4)
         .map_err(|_| corrupted("Failed to parse CFF table: Unexpected end of data"))?;
     let (major, minor, hdr_size, off_size) = (h[0], h[1], h[2], h[3]);
@@ -171,19 +170,77 @@ fn parse(data: &[u8]) -> Result<Vec<&[u8]>, Error> {
         )));
     }
     let strings = index(data, tops.end)?;
-    index(data, strings.end)?;
+    let gsubrs = index(data, strings.end)?;
     // Ruby parses every Top DICT eagerly; any bad operand fails the whole table.
     let mut cs = None;
+    let mut private = None;
     for (n, &(s, e)) in tops.items.iter().enumerate() {
-        let off = charstrings_offset(&data[s..e])?;
+        let ops = dict_ops(&data[s..e])?;
+        let charstrings = ops
+            .iter()
+            .find(|(op, _)| *op == 17)
+            .and_then(|(_, operands)| operands.last().copied());
+        // The Private operator carries [length, offset] (TN 5177 5.15): the
+        // second operand is the offset the Subrs offset reads against.
+        let privates =
+            ops.iter()
+                .find(|(op, _)| *op == 18)
+                .and_then(|(_, operands)| match operands.as_slice() {
+                    [length, offset] => Some((*offset, *length)),
+                    [only] => Some((*only, *only)),
+                    _ => None,
+                });
         if n == 0 {
-            cs = off;
+            cs = charstrings;
+            private = privates;
         }
     }
-    let Some(off) = cs else { return Ok(vec![]) };
+    let mut state = CffState {
+        gsubrs: gsubrs.items.iter().map(|&(s, e)| &data[s..e]).collect(),
+        private: None,
+        subrs: Vec::new(),
+    };
+    if let Some((off, len)) = private {
+        let start = usize::try_from(off)
+            .map_err(|_| corrupted("Failed to parse Private DICT: negative seek"))?;
+        let size = usize::try_from(len)
+            .map_err(|_| corrupted("Failed to parse Private DICT: negative length"))?;
+        let bytes = take(data, start, size)?;
+        let ops = dict_ops(bytes)?;
+        state.private = Some(bytes);
+        if let Some((_, subrs)) = ops.iter().find(|(op, _)| *op == 19) {
+            let Some(subrs) = subrs.last().copied() else {
+                return Err(corrupted("Private DICT Subrs has no offset"));
+            };
+            let at = start
+                + usize::try_from(subrs)
+                    .map_err(|_| corrupted("Failed to parse local Subrs INDEX: negative offset"))?;
+            let ix = index(data, at).map_err(|e| {
+                corrupted(format!("Failed to parse local Subrs INDEX: {}", e.message))
+            })?;
+            state.subrs = ix.items.iter().map(|&(s, e)| &data[s..e]).collect();
+        }
+    }
+    let Some(off) = cs else {
+        return Ok((Vec::new(), state));
+    };
     let wrap = |e: Error| corrupted(format!("Failed to parse CharStrings INDEX: {}", e.message));
     let off = usize::try_from(off)
         .map_err(|_| corrupted("Failed to parse CharStrings INDEX: negative seek"))?;
     let ix = index(data, off).map_err(wrap)?;
-    Ok(ix.items.iter().map(|&(s, e)| &data[s..e]).collect())
+    Ok((ix.items.iter().map(|&(s, e)| &data[s..e]).collect(), state))
+}
+
+/// Ruby's CFF-facing message: every walk failure names the table.
+pub(crate) fn wrapped(error: Error) -> Error {
+    if error.class == ErrorClass::CorruptedTable && !error.message.starts_with("Failed to parse") {
+        corrupted(format!("Failed to parse CFF table: {}", error.message))
+    } else {
+        error
+    }
+}
+
+/// The CharStrings INDEX entries, walked exactly like Ruby's `Tables::Cff`.
+pub(crate) fn glyphs(data: &[u8]) -> Result<Vec<&[u8]>, Error> {
+    parse_all(data).map(|(glyphs, _)| glyphs).map_err(wrapped)
 }
