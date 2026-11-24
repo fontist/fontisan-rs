@@ -30,7 +30,7 @@ const NAME_FIELDS: [(&str, u16); 6] = [
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RowStatus {
     Ok,
-    /// dfont / Type 1: not read natively; route the file to Ruby.
+    /// Type 1: not read natively; route the file to Ruby.
     Unsupported,
 }
 
@@ -102,7 +102,7 @@ pub fn scan_bytes(bytes: &[u8], path: &str) -> Vec<Row> {
         format: format.map(|f| f.as_str().to_string()),
         is_collection: format.is_some_and(Format::is_collection),
     };
-    if matches!(format, Some(Format::Dfont | Format::Pfa | Format::Pfb)) {
+    if matches!(format, Some(Format::Pfa | Format::Pfb)) {
         let mut row = facts.base(None, 0);
         row.status = RowStatus::Unsupported;
         return vec![row];

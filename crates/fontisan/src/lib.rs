@@ -9,6 +9,7 @@
 
 pub mod audit;
 mod cffread;
+pub mod dfont;
 pub mod convert;
 mod error_kind;
 pub use error_kind::ErrorKind;

@@ -344,6 +344,26 @@ pub fn convert(
     let format = sfnt::detect_format(input);
     // 1h-coll: collection sources (ttcf, or a WOFF2 with the ttcf flavor).
     let woff2_collection = input.starts_with(b"wOF2") && input.get(4..8) == Some(b"ttcf");
+    if format == Some(Format::Dfont) {
+        // Ruby routes a dfont source through CollectionConverter, which
+        // rejects single-font targets; the collection targets fail inside
+        // unpack_dfont (load_from_binary does not exist) and stay on Ruby.
+        return Err(ConvertError::new(
+            "ArgumentError",
+            format!(
+                "Target format {} is not a collection format. Use ttc, otc, or dfont for collection conversion.",
+                match target {
+                    Target::Ttf => "ttf",
+                    Target::Otf => "otf",
+                    Target::Woff => "woff",
+                    Target::Woff2 => "woff2",
+                    Target::Ttc => "ttc",
+                    Target::Otc => "otc",
+                    Target::Svg => "svg",
+                }
+            ),
+        ));
+    }
     if matches!(format, Some(Format::Ttc | Format::Otc)) || woff2_collection {
         let source = if woff2_collection {
             collection::Source::Woff2Collection
