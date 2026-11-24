@@ -19,6 +19,9 @@ pub struct GlyphOutline {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Contour {
     pub points: Vec<Point>,
+    /// TrueType quadratic points (off-curve runs imply midpoints) when
+    /// false; Type 2 cubic segments `[c1, c2, on]` when true.
+    pub cubic: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -115,6 +118,7 @@ pub(super) fn decode_glyph(
     for &end in &end_points {
         contours.push(Contour {
             points: points[start..=end].to_vec(),
+            cubic: false,
         });
         start = end + 1;
     }
@@ -304,6 +308,7 @@ fn decode_composite(
                     .collect();
                 contours.push(Contour {
                     points: transformed,
+                    cubic: false,
                 });
             }
         }

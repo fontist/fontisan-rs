@@ -21,7 +21,7 @@ pub use font::{
 };
 pub use layout::{LayoutTable, Tag};
 pub use outlines::{
-    Contour, GlyphDigests, GlyphOutline, OutlineKind, OutlineSummary, Outlines, Point,
+    CffState, Contour, GlyphDigests, GlyphOutline, OutlineKind, OutlineSummary, Outlines, Point,
     outline_hashes,
 };
 pub use tables::{Head, Hhea, Maxp, Name, NameRecord, Os2, Post, Snapshot, Value};

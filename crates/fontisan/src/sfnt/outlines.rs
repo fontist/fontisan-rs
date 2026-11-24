@@ -8,11 +8,13 @@
 //! of Ruby's broken `Tables::Cff2` (TRIAGE: CFF2-PARSER).
 mod cff;
 mod cff2;
+mod charstring;
 mod glyf;
 mod points;
 
 use super::error::{Error, ErrorClass};
 use super::font::Font;
+pub use cff::CffState;
 pub use points::{Contour, GlyphOutline, Point};
 use sha2::{Digest, Sha256};
 
@@ -75,10 +77,12 @@ impl OutlineKind {
 }
 
 /// Every glyph's raw outline bytes, in glyph order, borrowed from the font.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Outlines<'a> {
     pub kind: OutlineKind,
     pub glyphs: Vec<&'a [u8]>,
+    /// Type 2 interpretation state for `OutlineKind::Cff`; `None` otherwise.
+    pub cff: Option<cff::CffState<'a>>,
 }
 
 impl Outlines<'_> {
@@ -86,13 +90,23 @@ impl Outlines<'_> {
         self.glyphs.len()
     }
 
-    /// Decodes one glyph's outline points (TrueType glyf only: contours of
-    /// on/off-curve points in font units, composites resolved). CFF and CFF2
-    /// outlines refuse typed until charstring decoding exists; a glyph id out
-    /// of range and a malformed glyph are `CorruptedTableError`s.
+    /// Decodes one glyph's outline points in font units: glyf contours of
+    /// on/off-curve points with composites resolved, or CFF Type 2 charstrings
+    /// interpreted into cubic contours. A glyph id out of range and a
+    /// malformed glyph are `CorruptedTableError`s; CFF2 refuses typed.
     pub fn decode_points(&self, glyph_id: usize) -> Result<Option<GlyphOutline>, Error> {
         match self.kind {
             OutlineKind::Glyf => points::decode_glyph(&self.glyphs, glyph_id, 0),
+            OutlineKind::Cff => {
+                let state = self
+                    .cff
+                    .as_ref()
+                    .ok_or_else(|| Error::new(ErrorClass::Unsupported, "cff state is absent"))?;
+                let bytes = self.glyphs.get(glyph_id).ok_or_else(|| {
+                    Error::new(ErrorClass::CorruptedTable, "glyph id is out of range")
+                })?;
+                charstring::decode_glyph(bytes, state)
+            }
             kind => Err(Error::new(
                 ErrorClass::Unsupported,
                 format!(
@@ -182,18 +196,22 @@ impl Font<'_> {
             return Ok(Some(Outlines {
                 kind: OutlineKind::Glyf,
                 glyphs,
+                cff: None,
             }));
         }
         if let Some(data) = self.raw_table_data("CFF ") {
+            let (glyphs, cff) = cff::parse_all(data)?;
             return Ok(Some(Outlines {
                 kind: OutlineKind::Cff,
-                glyphs: cff::glyphs(data)?,
+                glyphs,
+                cff: Some(cff),
             }));
         }
         if let Some(data) = self.raw_table_data("CFF2") {
             return Ok(Some(Outlines {
                 kind: OutlineKind::Cff2,
                 glyphs: cff2::glyphs(data)?,
+                cff: None,
             }));
         }
         Ok(None)
@@ -261,6 +279,7 @@ mod tests {
         let glyphs = |idx: &[(usize, usize)]| Outlines {
             kind: OutlineKind::Cff,
             glyphs: idx.iter().map(|&(a, b)| &buf[a..b]).collect(),
+            cff: None,
         };
         // Two "faces" sharing glyph locations 0..10 and 10..30, one distinct each.
         let a = glyphs(&[(0, 10), (10, 30), (30, 40), (5, 5)]);
