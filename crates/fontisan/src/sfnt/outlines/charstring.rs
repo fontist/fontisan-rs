@@ -54,29 +54,28 @@ impl<'a> Interpreter<'a> {
             .get(*pos)
             .ok_or_else(|| corrupted("Unexpected end of charstring"))?;
         *pos += 1;
-        let byte8 = |pos: &mut usize| -> Result<f64, Error> {
+        let bytes8 = |pos: &mut usize| -> Result<u8, Error> {
             let b = *bytes
                 .get(*pos)
                 .ok_or_else(|| corrupted("Unexpected end of charstring"))?;
             *pos += 1;
-            Ok(f64::from(b))
+            Ok(b)
         };
         match byte {
             28 => {
-                let hi = byte8(pos)? as u16;
-                let lo = byte8(pos)? as u16;
+                let hi = bytes8(pos)? as u16;
+                let lo = bytes8(pos)? as u16;
                 Ok(f64::from(i16::from_be_bytes([hi as u8, lo as u8])))
             }
             32..=246 => Ok(f64::from(i32::from(byte) - 139)),
-            247..=250 => Ok((f64::from(byte) - 247.0) * 256.0 + byte8(pos)? + 108.0),
-            251..=254 => Ok(-(f64::from(byte) - 251.0) * 256.0 - byte8(pos)? - 108.0),
+            247..=250 => Ok((f64::from(byte) - 247.0) * 256.0 + f64::from(bytes8(pos)?) + 108.0),
+            251..=254 => Ok(-(f64::from(byte) - 251.0) * 256.0 - f64::from(bytes8(pos)?) - 108.0),
             255 => {
-                let hi = byte8(pos)? as i16 as i32;
-                let mid = byte8(pos)? as i32;
-                let lo1 = byte8(pos)? as i32;
-                let lo2 = byte8(pos)? as i32;
-                let word = hi << 24 | mid << 16 | lo1 << 8 | lo2;
-                Ok(f64::from(word) / 65536.0)
+                let mut bytes = [0u8; 4];
+                for slot in &mut bytes {
+                    *slot = bytes8(pos)?;
+                }
+                Ok(f64::from(i32::from_be_bytes(bytes)) / 65536.0)
             }
             _ => Err(corrupted("Operand byte is an operator")),
         }
