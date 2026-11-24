@@ -630,7 +630,7 @@ pub(super) fn decode_glyph(
         horizontal: true,
         cff: state,
     };
-    interpreter.run(&program)?;
+    interpreter.run(program)?;
     interpreter.flush();
     if interpreter.contours.is_empty() {
         return Ok(None);
