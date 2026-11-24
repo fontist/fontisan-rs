@@ -30,10 +30,12 @@ fn corrupted(message: impl Into<String>) -> Error {
 fn decrypt(data: &[u8], len_iv: usize) -> Vec<u8> {
     let mut r: u16 = 4330;
     let mut plain = Vec::with_capacity(data.len().saturating_sub(len_iv));
-    for &cipher in data.iter().skip(len_iv) {
+    for (i, &cipher) in data.iter().enumerate() {
         let byte = cipher ^ (r >> 8) as u8;
         r = (u16::from(cipher).wrapping_add(r).wrapping_mul(52845)).wrapping_add(22719);
-        plain.push(byte);
+        if i >= len_iv {
+            plain.push(byte);
+        }
     }
     plain
 }
@@ -656,13 +658,14 @@ mod tests {
 
     /// Encrypts fixture bytes the way CFF stores them (`len_iv` dummies).
     fn encrypt(plain: &[u8], len_iv: usize) -> Vec<u8> {
+        let mut data: Vec<u8> = (0..len_iv).map(|i| i as u8 ^ 0xa5).collect();
+        data.extend_from_slice(plain);
         let mut r: u16 = 4330;
-        let mut out = vec![0u8; len_iv];
-        out.extend_from_slice(plain);
-        for byte in out.iter_mut().skip(len_iv) {
-            let plain_byte = *byte ^ (r >> 8) as u8;
-            r = (u16::from(plain_byte).wrapping_add(r).wrapping_mul(52845)).wrapping_add(22719);
-            *byte = plain_byte;
+        let mut out = Vec::with_capacity(data.len());
+        for &plain_byte in &data {
+            let cipher = plain_byte ^ (r >> 8) as u8;
+            r = (u16::from(cipher).wrapping_add(r).wrapping_mul(52845)).wrapping_add(22719);
+            out.push(cipher);
         }
         out
     }
