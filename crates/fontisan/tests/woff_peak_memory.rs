@@ -71,7 +71,7 @@ fn woff1_convert_peak_stays_near_the_declared_size() {
     let file = woff1_bomb();
     LIVE.store(0, Relaxed);
     PEAK.store(0, Relaxed);
-    let r = fontisan::convert::convert(&file, fontisan::convert::Target::Ttf, 0);
+    let r = fontisan::convert::convert(&file, fontisan::convert::Target::Ttf, fontisan::convert::SourceType::Ttc, 0);
     let peak = PEAK.load(Relaxed);
     let e = r.expect_err("outline-less source must be rejected");
     assert!(

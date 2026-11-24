@@ -77,7 +77,7 @@ fn convert_direct(input: &[u8], to: &str) -> Got {
         "woff" => Target::Woff,
         _ => Target::Woff2,
     };
-    match convert::convert(input, t, 1_735_689_600) {
+    match convert::convert(input, t, fontisan::convert::SourceType::Ttc, 1_735_689_600) {
         Ok(b) => Got::Ok(b),
         Err(e) => Got::Err(e.class.into(), e.message),
     }

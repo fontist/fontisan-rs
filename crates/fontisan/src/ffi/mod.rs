@@ -21,7 +21,7 @@ pub use result::{FontisanErrorRow, FontisanResult};
 pub const MAGIC: u32 = u32::from_le_bytes(*b"FSAN");
 /// Bumped on any layout or semantics change. Callers compiled against another
 /// version are rejected.
-pub const ABI_VERSION: u32 = 2;
+pub const ABI_VERSION: u32 = 3;
 
 /// Status / error codes. Stable; append only.
 #[repr(i32)]
@@ -98,12 +98,14 @@ impl FontisanHeader {
 /// Operations. `Echo` exists to exercise the scaffolding; real ops come in 1g.
 pub const OP_ECHO: u32 = 0;
 /// Convert. `input` = 16-byte prefix (u32 BE target: 0 ttf, 1 otf, 2 woff,
-/// 3 woff2, 4 ttc, 5 otc (collection sources); u32 reserved; i64 BE timestamp) followed by the font bytes.
+/// 3 woff2, 4 ttc, 5 otc (collection sources); u32 BE source hint: 0 ttc (the
+/// legacy default), 1 ttc, 2 otc — Ruby's `.ttc`/`.otc` extension decision
+/// for a `ttcf` input, #192 gap 7; i64 BE timestamp) followed by the font bytes.
 /// Payload: the converted font.
 pub const OP_CONVERT: u32 = 1;
-/// Extract a collection member. `input` = 16-byte prefix (u32 BE index; 12
-/// reserved bytes) followed by the collection. Payload: u32 BE basename
-/// length, the basename, then the member's font bytes.
+/// Extract a collection member. `input` = 16-byte prefix (u32 BE index; u32 BE
+/// source hint as [`OP_CONVERT`]; 8 reserved bytes) followed by the collection.
+/// Payload: u32 BE basename length, the basename, then the member's font bytes.
 pub const OP_EXTRACT: u32 = 2;
 /// Encode a single-font sfnt as WOFF2 (card 1h-woff2enc). `input` is an 8-byte little-endian
 /// i64 Unix timestamp followed by the sfnt bytes; `flags` bit 0 set = use the timestamp for
@@ -128,6 +130,13 @@ pub const OP_SUBSET: u32 = 6;
 /// u32 BE glyph ids (sorted, unique). Failure status `ConvertFailed`,
 /// message `<ruby class>: <message>`.
 pub const OP_GLYPH_IDS: u32 = 12;
+/// Per-glyph outline hashes (the facade's `outline_hashes`, #192 gap 2).
+/// `input` = u32 BE face index, 12 reserved bytes, then the font bytes
+/// (single sfnt, collection face select, woff/woff2 decode). Payload: JSON
+/// `{"kind":"glyf"|"cff"|"cff2"|null,"hashes":[hex...]}` — the Ruby
+/// canonical shape. Failure status `ConvertFailed`, message
+/// `<ruby class>: <message>`.
+pub const OP_OUTLINE_HASHES: u32 = 4;
 /// Read ops (card 1g-abi); payloads are packed JSON rows, see `read_ops`.
 /// Read: `input` = font bytes; `flags` = [`READ_FLAG_METADATA`] | [`READ_FLAG_LAZY`].
 pub const OP_READ: u32 = 8;
@@ -250,6 +259,9 @@ unsafe fn dispatch(req: *const FontisanRequest) -> Result<Vec<u8>, FfiError> {
                 ));
             }
             let param = u32::from_be_bytes([input[0], input[1], input[2], input[3]]);
+            let source = crate::convert::SourceType::from_hint(u32::from_be_bytes([
+                input[4], input[5], input[6], input[7],
+            ]));
             let mut ts = [0u8; 8];
             ts.copy_from_slice(&input[8..16]);
             let font = &input[16..];
@@ -263,9 +275,10 @@ unsafe fn dispatch(req: *const FontisanRequest) -> Result<Vec<u8>, FfiError> {
                         format!("unknown target {param}"),
                     )
                 })?;
-                crate::convert::convert(font, target, i64::from_be_bytes(ts)).map_err(failed)
+                crate::convert::convert(font, target, source, i64::from_be_bytes(ts))
+                    .map_err(failed)
             } else {
-                let x = crate::convert::extract(font, param as usize).map_err(failed)?;
+                let x = crate::convert::extract(font, param as usize, source).map_err(failed)?;
                 let mut out = Vec::with_capacity(4 + x.basename.len() + x.data.len());
                 out.extend_from_slice(&(x.basename.len() as u32).to_be_bytes());
                 out.extend_from_slice(x.basename.as_bytes());
@@ -417,6 +430,31 @@ unsafe fn dispatch(req: *const FontisanRequest) -> Result<Vec<u8>, FfiError> {
                     }
                     payload
                 })
+                .map_err(|e| {
+                    FfiError::new(FontisanStatus::ConvertFailed, e.to_string()).with_kind(e.kind())
+                })
+        }
+        OP_OUTLINE_HASHES => {
+            if req.input.is_null() && req.input_len != 0 {
+                return Err(FfiError::new(
+                    FontisanStatus::InvalidArgument,
+                    "input is null with non-zero length",
+                ));
+            }
+            let input: &[u8] = if req.input_len == 0 {
+                &[]
+            } else {
+                unsafe { std::slice::from_raw_parts(req.input, req.input_len) }
+            };
+            if input.len() < 16 {
+                return Err(FfiError::new(
+                    FontisanStatus::InvalidArgument,
+                    "input is shorter than the 16-byte parameter prefix",
+                ));
+            }
+            let index = u32::from_be_bytes([input[0], input[1], input[2], input[3]]) as usize;
+            crate::sfnt::outline_hashes(&input[16..], index)
+                .map(|row| row.render().into_bytes())
                 .map_err(|e| {
                     FfiError::new(FontisanStatus::ConvertFailed, e.to_string()).with_kind(e.kind())
                 })

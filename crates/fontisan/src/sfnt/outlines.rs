@@ -16,6 +16,25 @@ use super::font::Font;
 pub use points::{Contour, GlyphOutline, Point};
 use sha2::{Digest, Sha256};
 
+use crate::convert::ConvertError;
+use crate::json::Json;
+
+/// The facade's `outline_hashes` for face `index` of `input` (fontisan#192
+/// gap 2): `{"kind": "glyf"|"cff"|"cff2"|null, "hashes": [hex, ...]}`, or the
+/// facade's load error (the read ops' Ruby class + message surface).
+pub fn outline_hashes(input: &[u8], index: usize) -> Result<Json, ConvertError> {
+    let surface = |e: Error| ConvertError::new(e.class.ruby_name(), e.message.clone());
+    let font = Font::load(input, index, super::Options::default()).map_err(surface)?;
+    let Some(outlines) = font.outlines().map_err(surface)? else {
+        return Ok(Json::Obj(vec![("kind", Json::Null), ("hashes", Json::Arr(Vec::new()))]));
+    };
+    let hashes = outlines.hashes().iter().map(|h| Json::Str(hex(h))).collect();
+    Ok(Json::Obj(vec![
+        ("kind", Json::Str(outlines.kind.as_str().to_string())),
+        ("hashes", Json::Arr(hashes)),
+    ]))
+}
+
 /// Which outline table family a font's glyphs come from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OutlineKind {

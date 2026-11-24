@@ -2,9 +2,9 @@
 //! TTC/OTC and WOFF2-collection sources.
 //!
 //! Ruby decides the source type from the input file's extension (`.otc` is OTC, any other
-//! `ttcf` file TTC) and the target from the requested format. Bytes carry no path, so a
-//! `ttcf` input is treated as `.ttc`, like [`super::extract`]. Consequences, all measured
-//! against the goldens:
+//! `ttcf` file TTC); the caller passes that decision in ([`SourceType`], the bytes
+//! carry no path) and the target comes from the requested format. Consequences, all
+//! measured against the goldens:
 //!
 //! * same source and target type (`ttc` to `ttc`, WOFF2 collection to `woff2`) copies the input;
 //! * otherwise the members are unpacked, `Collection::Builder` repacks them for `ttc`/`otc`
@@ -459,8 +459,11 @@ const TTCF_HEADER_VERSION: u32 = 0x0001_0000;
 /// What a collection input is, from its bytes alone.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Source {
-    /// `ttcf` (Ruby: `.ttc` extension; `.otc` is not distinguishable here).
+    /// `ttcf` input whose path Ruby read as `.ttc`.
     Ttc,
+    /// `ttcf` input whose path Ruby read as `.otc` (#192 gap 7; the caller
+    /// passes the extension decision — the bytes cannot distinguish).
+    Otc,
     Woff2Collection,
 }
 
@@ -478,10 +481,12 @@ pub(crate) fn convert(
     timestamp: i64,
 ) -> Result<Vec<u8>, ConvertError> {
     match (source, target) {
-        (Source::Ttc, Target::Ttc) | (Source::Woff2Collection, Target::Woff2) => Ok(input.to_vec()),
+        (Source::Ttc, Target::Ttc)
+        | (Source::Otc, Target::Otc)
+        | (Source::Woff2Collection, Target::Woff2) => Ok(input.to_vec()),
         (_, Target::Ttc | Target::Otc | Target::Woff2) => {
             let members = match source {
-                Source::Ttc => ttc_members(input)?,
+                Source::Ttc | Source::Otc => ttc_members(input)?,
                 Source::Woff2Collection => woff2_members(input)?,
             };
             // Ruby's `detect_font_format` runs on every unpacked member: an

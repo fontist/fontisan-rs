@@ -310,9 +310,33 @@ fn validate_ttf_output(ttf: &Tables) -> Result<(), ConvertError> {
     )
 }
 
+/// The `.ttc` vs `.otc` decision Ruby makes from the input path's extension
+/// (#192 gap 7): a `ttcf` input named `.otc` is an OTC source, anything else
+/// is TTC. The bytes carry no path, so the caller passes the decision.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SourceType {
+    Ttc,
+    Otc,
+}
+
+impl SourceType {
+    /// The wire encoding of the source hint: `0` is the legacy default (ttc,
+    /// what a caller that never heard of the hint gets), `1` ttc, `2` otc.
+    pub fn from_hint(code: u32) -> Self {
+        if code == 2 { Self::Otc } else { Self::Ttc }
+    }
+}
+
 /// `Fontisan.convert(input, to: target)` for static fonts. `timestamp` is
-/// used by WOFF2 encode only (head.modified, Ruby's encoder rules).
-pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, ConvertError> {
+/// used by WOFF2 encode only (head.modified, Ruby's encoder rules). `source`
+/// is the caller's `.ttc`/`.otc` extension decision for a `ttcf` input; it
+/// decides copy vs repack (same source and target type copies the input).
+pub fn convert(
+    input: &[u8],
+    target: Target,
+    source: SourceType,
+    timestamp: i64,
+) -> Result<Vec<u8>, ConvertError> {
     let format = sfnt::detect_format(input);
     // 1h-coll: collection sources (ttcf, or a WOFF2 with the ttcf flavor).
     let woff2_collection = input.starts_with(b"wOF2") && input.get(4..8) == Some(b"ttcf");
@@ -320,7 +344,10 @@ pub fn convert(input: &[u8], target: Target, timestamp: i64) -> Result<Vec<u8>, 
         let source = if woff2_collection {
             collection::Source::Woff2Collection
         } else {
-            collection::Source::Ttc
+            match source {
+                SourceType::Ttc => collection::Source::Ttc,
+                SourceType::Otc => collection::Source::Otc,
+            }
         };
         return collection::convert(input, source, target, timestamp);
     }
@@ -481,7 +508,7 @@ mod tests {
     fn cff2_source_without_loadable_cff2_to_ttf_matches_ruby() {
         // Ruby's CFF2 source check: no internal planning id, no Unsupported class.
         let font = sfnt(core(), &[b"CFF2"]);
-        let e = convert(&font, Target::Ttf, 0).expect_err("fails");
+        let e = convert(&font, Target::Ttf, SourceType::Ttc, 0).expect_err("fails");
         assert_eq!(e.class, ERROR_CLASS);
         assert_eq!(
             e.message,
@@ -493,7 +520,7 @@ mod tests {
     fn variable_font_without_gvar_or_cff2_keeps_fvar_through_convert() {
         // `:static` to Ruby: the tables pass through, so the same source check applies.
         let font = sfnt(core(), &[b"fvar", b"CFF "]);
-        let out = convert(&font, Target::Woff, 0).expect("converts");
+        let out = convert(&font, Target::Woff, SourceType::Ttc, 0).expect("converts");
         assert!(out.starts_with(b"wOFF"));
     }
 

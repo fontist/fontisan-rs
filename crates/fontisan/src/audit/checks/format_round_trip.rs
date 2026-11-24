@@ -8,7 +8,7 @@
 use std::collections::BTreeSet;
 
 use crate::audit::types::{CheckError, Issue, Severity};
-use crate::convert::{self, Target};
+use crate::convert::{self, SourceType, Target};
 use crate::sfnt::Font;
 
 pub const CODE: &str = "format_round_trip";
@@ -21,7 +21,7 @@ pub fn run(font: &Font<'_>) -> Result<Vec<Issue>, CheckError> {
     } else {
         return Ok(vec![]);
     };
-    let Ok(converted) = convert::convert(&sfnt_bytes(font), target, 0) else {
+    let Ok(converted) = convert::convert(&sfnt_bytes(font), target, SourceType::Ttc, 0) else {
         return Ok(vec![]);
     };
     Ok(compare(font, &converted, target))
