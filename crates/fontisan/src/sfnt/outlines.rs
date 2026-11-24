@@ -28,6 +28,13 @@ pub fn outline_hashes(input: &[u8], index: usize) -> Result<Json, ConvertError> 
     let Some(outlines) = font.outlines().map_err(surface)? else {
         return Ok(Json::Obj(vec![("kind", Json::Null), ("hashes", Json::Arr(Vec::new()))]));
     };
+    // The facade never serves CFF2 here: Ruby's `raw_table` cannot fetch the
+    // CFF2 table, so `outline_data` falls through to nil (the read docs keep
+    // the spec-based CFF2 walk for the goldens, TRIAGE: CFF2-PARSER — this
+    // op matches the facade instead).
+    if outlines.kind == OutlineKind::Cff2 {
+        return Ok(Json::Obj(vec![("kind", Json::Null), ("hashes", Json::Arr(Vec::new()))]));
+    }
     let hashes = outlines.hashes().iter().map(|h| Json::Str(hex(h))).collect();
     Ok(Json::Obj(vec![
         ("kind", Json::Str(outlines.kind.as_str().to_string())),
