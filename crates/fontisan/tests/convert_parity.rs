@@ -155,7 +155,7 @@ enum Got {
 
 fn via_rust(input: &[u8], op: &str, to: &str, index: usize) -> Got {
     if op == "extract" {
-        return match convert::extract(input, index) {
+        return match convert::extract(input, index, fontisan::convert::SourceType::Ttc) {
             Ok(x) => Got::Ok(x.data, Some(x.basename)),
             Err(e) => Got::Err(e.class.into(), e.message),
         };
@@ -168,7 +168,12 @@ fn via_rust(input: &[u8], op: &str, to: &str, index: usize) -> Got {
         "woff2" => Target::Woff2,
         _ => Target::Woff,
     };
-    match convert::convert(input, target, 1_735_689_600) {
+    match convert::convert(
+        input,
+        target,
+        fontisan::convert::SourceType::Ttc,
+        1_735_689_600,
+    ) {
         Ok(b) => Got::Ok(b, None),
         Err(e) => Got::Err(e.class.into(), e.message),
     }

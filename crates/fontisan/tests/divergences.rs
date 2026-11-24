@@ -201,9 +201,13 @@ fn cff_to_ttf_without_head_hhea_or_maxp_fails_like_ruby() {
     let src = std::fs::read(corpus.join("fonts/TestOTF.otf")).unwrap();
     for tag in [b"head", b"hhea", b"maxp"] {
         let name = String::from_utf8_lossy(tag).into_owned();
-        let err =
-            fontisan::convert::convert(&drop_table(&src, tag), fontisan::convert::Target::Ttf, 0)
-                .expect_err(&name);
+        let err = fontisan::convert::convert(
+            &drop_table(&src, tag),
+            fontisan::convert::Target::Ttf,
+            fontisan::convert::SourceType::Ttc,
+            0,
+        )
+        .expect_err(&name);
         assert_eq!(
             err.message,
             format!("Conversion failed: Transformation failed: Font missing required {name} table"),
@@ -239,9 +243,13 @@ fn cff_to_ttf_without_post_name_os2_or_cmap_fails_like_ruby() {
     ];
     for (tag, msg) in want {
         let name = String::from_utf8_lossy(tag).into_owned();
-        let err =
-            fontisan::convert::convert(&drop_table(&src, tag), fontisan::convert::Target::Ttf, 0)
-                .expect_err(&name);
+        let err = fontisan::convert::convert(
+            &drop_table(&src, tag),
+            fontisan::convert::Target::Ttf,
+            fontisan::convert::SourceType::Ttc,
+            0,
+        )
+        .expect_err(&name);
         assert_eq!(
             err.message,
             format!("Conversion failed: Transformation failed: {msg}"),
@@ -259,9 +267,13 @@ fn ttf_to_otf_without_head_hhea_or_maxp_fails_like_ruby() {
     let src = std::fs::read(corpus.join("fonts/TestTTF.ttf")).unwrap();
     for tag in [b"head", b"hhea", b"maxp"] {
         let name = String::from_utf8_lossy(tag).into_owned();
-        let err =
-            fontisan::convert::convert(&drop_table(&src, tag), fontisan::convert::Target::Otf, 0)
-                .expect_err(&name);
+        let err = fontisan::convert::convert(
+            &drop_table(&src, tag),
+            fontisan::convert::Target::Otf,
+            fontisan::convert::SourceType::Ttc,
+            0,
+        )
+        .expect_err(&name);
         assert_eq!(
             err.message,
             format!("Conversion failed: Transformation failed: Font missing required {name} table"),
@@ -324,9 +336,13 @@ fn ttf_to_otf_without_loca_name_post_os2_or_cmap_fails_like_ruby() {
     ];
     for (tag, msg) in want {
         let name = String::from_utf8_lossy(tag).into_owned();
-        let err =
-            fontisan::convert::convert(&drop_table(&src, tag), fontisan::convert::Target::Otf, 0)
-                .expect_err(&name);
+        let err = fontisan::convert::convert(
+            &drop_table(&src, tag),
+            fontisan::convert::Target::Otf,
+            fontisan::convert::SourceType::Ttc,
+            0,
+        )
+        .expect_err(&name);
         assert_eq!(
             err.message,
             format!("Conversion failed: Transformation failed: {msg}"),
@@ -385,7 +401,13 @@ fn convert_of_fonts_missing_a_table_matches_ruby() {
             drop_table_from_collection(&src, &tag4)
         } else if src.starts_with(b"wOFF") {
             let sfnt = fontisan::woff::decode_woff(&src).unwrap();
-            convert(&drop_table(&sfnt, &tag4), Target::Woff, 0).unwrap()
+            convert(
+                &drop_table(&sfnt, &tag4),
+                Target::Woff,
+                fontisan::convert::SourceType::Ttc,
+                0,
+            )
+            .unwrap()
         } else {
             drop_table(&src, &tag4)
         };
@@ -397,7 +419,7 @@ fn convert_of_fonts_missing_a_table_matches_ruby() {
             "otc" => Target::Otc,
             other => panic!("{other}"),
         };
-        let got = convert(&input, target, 0);
+        let got = convert(&input, target, fontisan::convert::SourceType::Ttc, 0);
         match (want.get("error"), got) {
             (Some(msg), Err(e)) => assert_eq!(e.message, msg.as_str().unwrap(), "{key}"),
             (Some(msg), Ok(_)) => panic!("{key}: ruby fails with {msg}, native wrote a font"),
@@ -447,9 +469,11 @@ fn woff2_widens_short_loca_when_padded_glyf_overflows() {
     let Some(corpus) = corpus() else { return };
     let src = std::fs::read(corpus.join("fonts/SourceSans3VF-Upright.ttf")).unwrap();
     let base = drop_table(&drop_table(&src, b"fvar"), b"gvar");
-    let single = convert(&base, Target::Woff2, 0).expect("single font converts");
+    let single = convert(&base, Target::Woff2, fontisan::convert::SourceType::Ttc, 0)
+        .expect("single font converts");
     let ttc = collection_of(&[base.clone(), base]);
-    let coll = convert(&ttc, Target::Woff2, 0).expect("collection converts");
+    let coll = convert(&ttc, Target::Woff2, fontisan::convert::SourceType::Ttc, 0)
+        .expect("collection converts");
     let Some(bin) = std::env::var_os("FONTISAN_WOFF2_DECOMPRESS")
         .map(std::path::PathBuf::from)
         .filter(|p| p.is_file())

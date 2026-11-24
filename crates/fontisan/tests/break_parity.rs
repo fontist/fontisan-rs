@@ -37,7 +37,8 @@ fn convert_to_otf_rejects_a_cmap_with_glyph_ids_past_num_glyphs() {
     let Some(c) = corpus() else { return };
     let orig = std::fs::read(font_path(&c, "NotoSans-Regular.ttf")).unwrap();
     // Positive control: the unmodified font converts.
-    convert::convert(&orig, Target::Otf, 0).expect("unmodified font converts");
+    convert::convert(&orig, Target::Otf, fontisan::convert::SourceType::Ttc, 0)
+        .expect("unmodified font converts");
     let mut font = orig;
     assert_eq!(
         (font[100_439], font[104_694]),
@@ -46,7 +47,8 @@ fn convert_to_otf_rejects_a_cmap_with_glyph_ids_past_num_glyphs() {
     );
     font[100_439] = 3;
     font[104_694] = 0o145;
-    let e = convert::convert(&font, Target::Otf, 0).unwrap_err();
+    let e =
+        convert::convert(&font, Target::Otf, fontisan::convert::SourceType::Ttc, 0).unwrap_err();
     assert_eq!(
         e.message,
         "Conversion failed: Transformation failed: Output validation failed: Font structure validation failed for check 'cmap_glyph_indices'"

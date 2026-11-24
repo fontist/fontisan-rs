@@ -7,7 +7,8 @@ use fontisan::convert::{Target, convert};
 fn woff1_converts_to_woff2_and_round_trips() {
     let Some(c) = corpus() else { return };
     let woff = std::fs::read(font_path(&c, "TestWOFF.woff")).unwrap();
-    let out = convert(&woff, Target::Woff2, 0).expect("WOFF1 -> WOFF2");
+    let out = convert(&woff, Target::Woff2, fontisan::convert::SourceType::Ttc, 0)
+        .expect("WOFF1 -> WOFF2");
     assert_eq!(&out[..4], b"wOF2");
     let back = fontisan::woff::decode_woff2(&out).expect("decodes");
     let orig = fontisan::woff::decode_woff(&woff).unwrap();

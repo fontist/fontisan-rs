@@ -362,6 +362,17 @@ pub fn ffi_glyph_ids(data: &[u8]) {
     call_op(ffi::OP_GLYPH_IDS, 0, &input);
 }
 
+pub fn ffi_outline_hashes(data: &[u8]) {
+    let (raw, s, rest) = split(data, 6);
+    if let Some(raw) = raw {
+        return call_op(ffi::OP_OUTLINE_HASHES, 0, raw);
+    }
+    let mut input = be32(u32::from(sel(s, 0)) % 6).to_vec(); // face index, mostly in range
+    input.extend_from_slice(&[0u8; 12]);
+    input.extend_from_slice(rest);
+    call_op(ffi::OP_OUTLINE_HASHES, 0, &input);
+}
+
 pub fn ffi_instance(data: &[u8]) {
     const TAGS: [&[u8; 4]; 5] = [b"wght", b"wdth", b"opsz", b"ital", b"slnt"];
     let (raw, s, rest) = split(data, 1 + 3 * 3);
@@ -556,6 +567,11 @@ pub const OPS: &[(&str, u32, &str)] = &[
     ("OP_WOFF2_ENCODE", ffi::OP_WOFF2_ENCODE, "ffi_woff2_encode"),
     ("OP_SUBSET", ffi::OP_SUBSET, "ffi_subset"),
     ("OP_GLYPH_IDS", ffi::OP_GLYPH_IDS, "ffi_glyph_ids"),
+    (
+        "OP_OUTLINE_HASHES",
+        ffi::OP_OUTLINE_HASHES,
+        "ffi_outline_hashes",
+    ),
     ("OP_INSTANCE", ffi::OP_INSTANCE, "ffi_instance"),
     ("OP_READ", ffi::OP_READ, "ffi_read"),
     ("OP_AUDIT", ffi::OP_AUDIT, "ffi_audit"),
@@ -588,4 +604,5 @@ pub const TARGETS: &[(&str, Body)] = &[
     ("ffi_audit_dir", ffi_audit_dir),
     ("ffi_header", ffi_header),
     ("ffi_glyph_ids", ffi_glyph_ids),
+    ("ffi_outline_hashes", ffi_outline_hashes),
 ];

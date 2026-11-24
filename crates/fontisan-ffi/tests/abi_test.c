@@ -204,11 +204,13 @@ int main(int argc, char **argv) {
   fontisan_result_free(res);
   free(ain);
 
-  /* dfont: unsupported, for the Ruby engine to serve */
+  /* dfont: read natively since #192 gap 5 (one metadata face). The PFB
+   * stays unsupported, for the Ruby engine to serve. */
   size_t dn;
   uint8_t *dfont = slurp(g_fonts, "TestDFONT.dfont", &dn);
   res = run(FONTISAN_OP_READ, 0, dfont, dn, &st);
-  CHECK(st == FONTISAN_E_UNSUPPORTED);
+  CHECK(st == FONTISAN_OK && rows_in(res) == 1);
+  CHECK(contains(res->payload, res->payload_len, "\"format\":\"dfont\""));
   fontisan_result_free(res);
   free(dfont);
 

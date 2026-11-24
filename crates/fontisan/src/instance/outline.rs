@@ -19,15 +19,15 @@ const HAVE_TWO_BY_TWO: u16 = 0x0080;
 pub(crate) struct Component {
     pub flags: u16,
     pub gid: u16,
-    arg1: i32,
-    arg2: i32,
+    pub arg1: i32,
+    pub arg2: i32,
     pub transform: Vec<u8>,
 }
 
 pub(crate) struct Outline {
     header_contours: i16,
     pub end_pts: Vec<usize>,
-    on_curve: Vec<bool>,
+    pub on_curve: Vec<bool>,
     overlap: bool,
     instructions: Vec<u8>,
     pub components: Vec<Component>,

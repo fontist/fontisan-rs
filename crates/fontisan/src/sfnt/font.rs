@@ -139,7 +139,9 @@ pub fn detect_format(b: &[u8]) -> Option<Format> {
         } else {
             Format::Woff2
         }),
-        Some([0, 0, 1, 0]) => Some(Format::Dfont),
+        // Ruby: the dfont magic plus the structural check (`dfont?`) —
+        // a 12-byte file with the magic is NOT a dfont.
+        Some([0, 0, 1, 0]) if crate::dfont::is_dfont(b) => Some(Format::Dfont),
         Some(sig) => sfnt_kind(sig),
         None => None,
     };
@@ -165,6 +167,7 @@ pub fn detect_format(b: &[u8]) -> Option<Format> {
 pub fn face_count(b: &[u8]) -> Option<usize> {
     match detect_format(b)? {
         Format::Ttc | Format::Otc => scan_collection(b).map(|(o, _)| o.len()),
+        Format::Dfont => crate::dfont::resources(b).map(|r| r.len()).ok(),
         // An out-of-range index makes the view report the member count.
         Format::Woff2Collection => super::woff2_view::collection(b, usize::MAX)
             .ok()
@@ -268,6 +271,18 @@ impl<'a> Font<'a> {
                 // Ruby's collection path neither wraps errors nor honours `lazy`.
                 let mut f =
                     Self::read_directory(bytes, offs[font_index] as usize, format, options)?;
+                f.read_table_data(false)?;
+                Ok(f)
+            }
+            Format::Dfont => {
+                // Ruby's dfont collection path reads the member eagerly and
+                // never wraps its errors, like the TTC path. Unlike TTC
+                // members, a dfont face's table offsets are relative to the
+                // member, so it reads from its own slice.
+                let (at, len) = crate::dfont::member(bytes, font_index)?;
+                let end = (at + len).min(bytes.len());
+                let face = &bytes[at.min(end)..end];
+                let mut f = Self::read_directory(face, 0, format, options)?;
                 f.read_table_data(false)?;
                 Ok(f)
             }

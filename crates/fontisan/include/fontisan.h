@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define FONTISAN_MAGIC 0x4E415346u /* "FSAN" little-endian */
-#define FONTISAN_ABI_VERSION 2u
+#define FONTISAN_ABI_VERSION 3u
 
 enum {
   FONTISAN_OK = 0,
@@ -49,11 +49,14 @@ enum {
 };
 
 #define FONTISAN_OP_ECHO 0u
-/* input = 16-byte prefix (u32 BE target 0 ttf/1 otf/2 woff/3 woff2, u32 reserved,
- * i64 BE timestamp) + font bytes; payload = converted font. Failure message is
- * "<ruby class>: <message>" with status FONTISAN_E_CONVERT_FAILED. */
+/* input = 16-byte prefix (u32 BE target 0 ttf/1 otf/2 woff/3 woff2, u32 BE source hint
+ * (0 ttc legacy default / 1 ttc / 2 otc: the caller's .ttc/.otc extension decision for a
+ * ttcf input — decides copy vs repack), i64 BE timestamp) + font bytes; payload =
+ * converted font. Failure message is "<ruby class>: <message>" with status
+ * FONTISAN_E_CONVERT_FAILED. */
 #define FONTISAN_OP_CONVERT 1u
-/* input = 16-byte prefix (u32 BE member index, 12 reserved) + collection;
+/* input = 16-byte prefix (u32 BE member index, u32 BE source hint as OP_CONVERT
+ * (decides the basename extension .ttf vs .otf), 8 reserved) + collection;
  * payload = u32 BE basename length, basename, member bytes. */
 #define FONTISAN_OP_EXTRACT 2u
 /* Encode a single-font sfnt as WOFF2. input = 8-byte little-endian i64 Unix timestamp, then the
@@ -76,6 +79,11 @@ enum {
  * N' u32 BE glyph ids (sorted, unique). Failure message is "<ruby class>: <message>" with status
  * FONTISAN_E_CONVERT_FAILED. */
 #define FONTISAN_OP_GLYPH_IDS 12u
+/* Per-glyph outline hashes (#192 gap 2). input = u32 BE face index, 12 reserved,
+ * then the font bytes (single sfnt / collection face / woff, woff2). payload = JSON
+ * {"kind":"glyf"|"cff"|"cff2"|null,"hashes":[hex...]} (the Ruby canonical shape).
+ * Failure message is "<ruby class>: <message>" with FONTISAN_E_CONVERT_FAILED. */
+#define FONTISAN_OP_OUTLINE_HASHES 4u
 
 /* Read-side ops. Every success payload is "packed rows": u32 BE row count, then per row a u32 BE
  * byte length and that many bytes of UTF-8 JSON (the facade's canonical documents).

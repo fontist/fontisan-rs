@@ -550,7 +550,7 @@ fn write_seeds() {
         put(&name, &bytes);
         if name.ends_with(".ttf") && !name.starts_with("malformed") {
             for (t, ext) in [(Target::Woff, "woff"), (Target::Woff2, "woff2")] {
-                if let Ok(w) = convert(&bytes, t, 0) {
+                if let Ok(w) = convert(&bytes, t, fontisan::convert::SourceType::Ttc, 0) {
                     put(&format!("{}.{ext}", name.trim_end_matches(".ttf")), &w);
                 }
             }
