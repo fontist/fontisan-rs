@@ -298,7 +298,9 @@ fn scan_one_file_matches_scan_goldens_through_the_abi() {
         }
     }
     eprintln!("abi scan: {matched} rows equal, {unsupported} unsupported");
-    assert!(matched >= 40 && unsupported >= 2, "{matched}/{unsupported}");
+    // The PFB entries are the only unsupported ones left (dfont is served
+    // since #192 gap 5; the corpus PFA is not detected by either tier).
+    assert!(matched >= 40 && unsupported >= 1, "{matched}/{unsupported}");
 }
 
 fn mixed_dir(corpus: &Path) -> (PathBuf, Vec<String>) {
@@ -333,7 +335,8 @@ fn scan_and_audit_dir_serve_a_mixed_directory_in_one_call() {
     let (dir, _) = mixed_dir(&corpus);
     let d = dir.to_str().unwrap().as_bytes();
     let scan = rows(call(OP_SCAN, 0, d), "scan dir");
-    // sorted by path; TTC is one row per member; unsupported rows for dfont and pfb
+    // sorted by path; TTC is one row per member; the PFB row stays
+    // unsupported (dfont is served since #192 gap 5)
     let paths: Vec<_> = scan
         .iter()
         .map(|r| r["path"].as_str().unwrap().to_string())
@@ -348,7 +351,7 @@ fn scan_and_audit_dir_serve_a_mixed_directory_in_one_call() {
             .map(|r| r["status"].as_str().unwrap())
             .collect()
     };
-    assert_eq!(status("TestDFONT.dfont"), ["unsupported"], "{paths:?}");
+    assert_eq!(status("TestDFONT.dfont"), ["ok"], "{paths:?}");
     assert_eq!(status("TestT1-Regular.pfb"), ["unsupported"]);
     assert_eq!(status("TestTTF.ttf"), ["ok"]);
     assert_eq!(status("TestTTC.ttc"), ["ok", "ok"]);
@@ -368,7 +371,8 @@ fn scan_and_audit_dir_serve_a_mixed_directory_in_one_call() {
                 .unwrap()
         };
         assert_eq!(audit.len(), 6);
-        assert_eq!(by("TestDFONT.dfont")["status"], "unsupported");
+        // dfont is served since #192 gap 5; the PFB stays handed back.
+        assert_eq!(by("TestDFONT.dfont")["status"], "ok");
         assert_eq!(by("TestT1-Regular.pfb")["status"], "unsupported");
         assert_eq!(by("TestTTC.ttc")["reports"].as_array().unwrap().len(), 2);
         let ttf = &by("TestTTF.ttf")["reports"][0];
