@@ -1,9 +1,10 @@
 //! Type 2 charstring interpretation (Adobe TN 5177) for CFF faces: outline
 //! points through the same [`GlyphOutline`] shape the glyf decoder produces.
 //!
-//! Charstrings are decrypted with the Type 1 cipher (key 4330, skipping the
-//! Private DICT's `lenIV` bytes, default 4), then interpreted against the
-//! global and local subr indexes (bias 107/1131/32768, nesting limit 10).
+//! Charstrings are Type 2 programs stored unencrypted in the INDEX (the
+//! Type 1 cipher applies only to Type 1 fonts); they are interpreted
+//! against the global and local subr indexes (bias 107/1131/32768,
+//! nesting limit 10).
 //! Cubic segments become `[c1, c2, on]` off-off-on triples and the contour
 //! is flagged [`Contour::cubic`], the convention the Ruby outline extractor
 //! uses. Coordinates round to integers like Ruby's `Float#round`. Widths are
@@ -24,20 +25,6 @@ fn corrupted(message: impl Into<String>) -> Error {
         ErrorClass::CorruptedTable,
         format!("{CORRUPTED}: {}", message.into()),
     )
-}
-
-/// The Type 1 cipher (eexec/charstring), skipping `len_iv` leading bytes.
-fn decrypt(data: &[u8], len_iv: usize) -> Vec<u8> {
-    let mut r: u16 = 4330;
-    let mut plain = Vec::with_capacity(data.len().saturating_sub(len_iv));
-    for (i, &cipher) in data.iter().enumerate() {
-        let byte = cipher ^ (r >> 8) as u8;
-        r = (u16::from(cipher).wrapping_add(r).wrapping_mul(52845)).wrapping_add(22719);
-        if i >= len_iv {
-            plain.push(byte);
-        }
-    }
-    plain
 }
 
 /// One frame of charstring execution: the program bytes and a read cursor.
@@ -507,8 +494,9 @@ impl<'a> Interpreter<'a> {
                 return Err(corrupted("random is refused (outlines stay deterministic)"));
             }
             34 => {
-                // hflex: dx1 dx2 dy2 dx3 dx4 dx5 dx6 fd.
-                let [dx1, dx2, dy2, dx3, dx4, dx5, dx6, _fd] = self.pop()?;
+                // hflex: dx1 dx2 dy2 dx3 dx4 dx5 dx6; no flex-depth operand
+                // exists and the second curve mirrors dy5 = -dy2.
+                let [dx1, dx2, dy2, dx3, dx4, dx5, dx6] = self.pop()?;
                 let (x, y) = (self.x, self.y);
                 self.curve_to(
                     (x + dx1, y),
@@ -517,7 +505,7 @@ impl<'a> Interpreter<'a> {
                 );
                 self.curve_to(
                     (self.x + dx4, self.y),
-                    (self.x + dx4 + dx5, self.y),
+                    (self.x + dx4 + dx5, self.y - dy2),
                     (self.x + dx4 + dx5 + dx6, self.y),
                 );
             }
@@ -630,7 +618,7 @@ pub(super) fn decode_glyph(
     data: &[u8],
     state: &CffState<'_>,
 ) -> Result<Option<GlyphOutline>, Error> {
-    let program = decrypt(data, state.len_iv);
+    let program = data;
     let mut interpreter = Interpreter {
         stack: Vec::new(),
         transients: [0.0; TRANSIENTS],
@@ -656,31 +644,16 @@ pub(super) fn decode_glyph(
 mod tests {
     use super::*;
 
-    /// Encrypts fixture bytes the way CFF stores them (`len_iv` dummies).
-    fn encrypt(plain: &[u8], len_iv: usize) -> Vec<u8> {
-        let mut data: Vec<u8> = (0..len_iv).map(|i| i as u8 ^ 0xa5).collect();
-        data.extend_from_slice(plain);
-        let mut r: u16 = 4330;
-        let mut out = Vec::with_capacity(data.len());
-        for &plain_byte in &data {
-            let cipher = plain_byte ^ (r >> 8) as u8;
-            r = (u16::from(cipher).wrapping_add(r).wrapping_mul(52845)).wrapping_add(22719);
-            out.push(cipher);
-        }
-        out
-    }
-
     fn state() -> CffState<'static> {
         CffState {
             gsubrs: Vec::new(),
             private: None,
             subrs: Vec::new(),
-            len_iv: 4,
         }
     }
 
     fn outline(program: &[u8]) -> Option<GlyphOutline> {
-        decode_glyph(&encrypt(program, 4), &state()).unwrap()
+        decode_glyph(program, &state()).unwrap()
     }
 
     fn points(program: &[u8]) -> Vec<Point> {
@@ -770,9 +743,7 @@ mod tests {
         // 0 0 rmoveto callsubr endchar: the bias is added to the encoded
         // number, so subr 0 encodes as -107 (28 0xff 0x95) with bias 107.
         let program = [139, 139, 21, 28, 0xff, 0x95, 10, 14];
-        let outline = decode_glyph(&encrypt(&program, 4), &state)
-            .unwrap()
-            .unwrap();
+        let outline = decode_glyph(&program, &state).unwrap().unwrap();
         let points = &outline.contours[0].points;
         assert_eq!((points[1].x, points[1].y), (30, 0));
     }
@@ -811,6 +782,42 @@ mod tests {
     }
 
     #[test]
+    fn hflex_takes_seven_args_and_mirrors_the_second_control_height() {
+        // 0 0 rmoveto hflex 10 5 8 3 4 2 6: two curves, the first flat at
+        // the baseline, the second mirroring dy5 = -dy2 back to the baseline.
+        let program = [
+            139,
+            139,
+            21, // 0 0 rmoveto
+            139 + 10,
+            139 + 5,
+            139 + 8,
+            139 + 3,
+            139 + 4,
+            139 + 2,
+            139 + 6,
+            12,
+            34, // hflex
+            14,
+        ];
+        let outline = outline(&program).unwrap();
+        let pts = &outline.contours[0].points;
+        let expected = [
+            (0, 0, true),
+            (10, 0, false),
+            (15, 8, false),
+            (18, 0, true),
+            (22, 0, false),
+            (24, -8, false),
+            (30, 0, true),
+        ];
+        assert_eq!(pts.len(), expected.len());
+        for (pt, (x, y, on)) in pts.iter().zip(expected) {
+            assert_eq!((pt.x, pt.y, pt.on_curve), (x, y, on));
+        }
+    }
+
+    #[test]
     fn flex1_supplies_the_missing_end_component() {
         // 0 0 rmoveto flex1 dx sums 20 horizontal vs 4 vertical → the end
         // x comes from d6: two cubics landing at (d6, -dy) from the join.
@@ -844,19 +851,15 @@ mod tests {
 
     #[test]
     fn blank_charstrings_and_reserved_operators_are_typed() {
-        assert!(
-            decode_glyph(&encrypt(&[14], 4), &state())
-                .unwrap()
-                .is_none()
-        );
-        let error = decode_glyph(&encrypt(&[9], 4), &state()).unwrap_err();
+        assert!(decode_glyph(&[14], &state()).unwrap().is_none());
+        let error = decode_glyph(&[9], &state()).unwrap_err();
         assert_eq!(error.class, ErrorClass::CorruptedTable);
     }
 
     #[test]
     fn random_refuses_to_keep_outlines_deterministic() {
         let program = [12, 23, 14];
-        let error = decode_glyph(&encrypt(&program, 4), &state()).unwrap_err();
+        let error = decode_glyph(&program, &state()).unwrap_err();
         assert!(error.message.contains("deterministic"));
     }
 }

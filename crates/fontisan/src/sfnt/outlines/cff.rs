@@ -145,8 +145,6 @@ pub struct CffState<'a> {
     pub private: Option<&'a [u8]>,
     /// The Private DICT's local Subr INDEX entries, in order.
     pub subrs: Vec<&'a [u8]>,
-    /// The CharString encryption skip count (Private DICT `lenIV`, default 4).
-    pub len_iv: usize,
 }
 
 /// Walks the whole CFF: the charstrings plus the Type 2 interpretation state.
@@ -201,7 +199,6 @@ pub(crate) fn parse_all(data: &[u8]) -> Result<(Vec<&[u8]>, CffState<'_>), Error
         gsubrs: gsubrs.items.iter().map(|&(s, e)| &data[s..e]).collect(),
         private: None,
         subrs: Vec::new(),
-        len_iv: 4,
     };
     if let Some((off, len)) = private {
         let start = usize::try_from(off)
@@ -222,13 +219,6 @@ pub(crate) fn parse_all(data: &[u8]) -> Result<(Vec<&[u8]>, CffState<'_>), Error
                 corrupted(format!("Failed to parse local Subrs INDEX: {}", e.message))
             })?;
             state.subrs = ix.items.iter().map(|&(s, e)| &data[s..e]).collect();
-        }
-        if let Some((_, lens)) = ops.iter().find(|(op, _)| *op == 20) {
-            let Some(len) = lens.last().copied() else {
-                return Err(corrupted("Private DICT lenIV has no operand"));
-            };
-            state.len_iv =
-                usize::try_from(len).map_err(|_| corrupted("Failed to parse lenIV: negative"))?;
         }
     }
     let Some(off) = cs else {
