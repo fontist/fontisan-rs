@@ -841,11 +841,9 @@ mod tests {
 
     #[test]
     fn blank_charstrings_and_reserved_operators_are_typed() {
-        assert!(
-            decode_glyph(&encrypt(&[14], 4), &state())
-                .unwrap()
-                .is_none()
-        );
+        assert!(decode_glyph(&encrypt(&[14], 4), &state())
+            .unwrap()
+            .is_none());
         let error = decode_glyph(&encrypt(&[9], 4), &state()).unwrap_err();
         assert_eq!(error.class, ErrorClass::CorruptedTable);
     }
