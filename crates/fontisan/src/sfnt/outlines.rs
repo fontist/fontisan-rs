@@ -9,10 +9,12 @@
 mod cff;
 mod cff2;
 mod glyf;
+mod points;
 
 use super::error::{Error, ErrorClass};
 use super::font::Font;
 use sha2::{Digest, Sha256};
+pub use points::{Contour, GlyphOutline, Point};
 
 /// Which outline table family a font's glyphs come from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,6 +45,20 @@ pub struct Outlines<'a> {
 impl Outlines<'_> {
     pub fn count(&self) -> usize {
         self.glyphs.len()
+    }
+
+    /// Decodes one glyph's outline points (TrueType glyf only: contours of
+    /// on/off-curve points in font units, composites resolved). CFF and CFF2
+    /// outlines refuse typed until charstring decoding exists; a glyph id out
+    /// of range and a malformed glyph are `CorruptedTableError`s.
+    pub fn decode_points(&self, glyph_id: usize) -> Result<Option<GlyphOutline>, Error> {
+        match self.kind {
+            OutlineKind::Glyf => points::decode_glyph(&self.glyphs, glyph_id, 0),
+            kind => Err(Error::new(
+                ErrorClass::Unsupported,
+                format!("{} outline points are not decoded (byte ranges only)", kind.as_str()),
+            )),
+        }
     }
 
     /// SHA-256 of each glyph's bytes (the empty glyph hashes the empty string).
