@@ -307,9 +307,15 @@ pub fn glyph_ids_for(
     // The facade's glyph_ids surfaces the load failure exactly as the read
     // ops do (RuntimeError + "Invalid TrueTypeFont file: ..." for a truncated
     // sfnt) — the generic Fontisan::Error wrapper would diverge from the Ruby
-    // tier's malformed parity surface.
-    let font = sfnt::Font::from_bytes(input)
-        .map_err(|e| SubsetError::new(e.class.ruby_name(), e.message.clone()))?;
+    // tier's malformed parity surface. Ruby loads full + eager here
+    // (reference.rb); the metadata default would gate the cmap of an
+    // eagerly-loaded collection face.
+    let font = sfnt::Font::load(
+        input,
+        0,
+        sfnt::Options { mode: sfnt::LoadingMode::Full, lazy: false },
+    )
+    .map_err(|e| SubsetError::new(e.class.ruby_name(), e.message.clone()))?;
     // Ruby's `gids_for` raises MissingTableError for an absent cmap (reference.rb).
     let map: std::collections::BTreeMap<u32, u32> = match font.cmap() {
         Ok(None) => {

@@ -75,6 +75,17 @@ fn ttc_members(input: &[u8]) -> Result<Vec<Member>, ConvertError> {
     Ok(out)
 }
 
+/// Member `index`'s `(sfnt_version, tables)` read at its absolute offsets,
+/// directory order preserved (no rebuild): what Ruby's loader hands the
+/// instancer for a collection source.
+pub(crate) fn member_tables(input: &[u8], index: usize) -> Result<(u32, Tables), ConvertError> {
+    ttc_members(input)?
+        .into_iter()
+        .nth(index)
+        .map(|m| (m.sfnt_version, m.tables))
+        .ok_or_else(|| fail("collection index out of range"))
+}
+
 /// Face 0 of a `ttcf` file as a standalone sfnt (what Ruby's loader hands the subsetter).
 pub(crate) fn first_face(input: &[u8]) -> Result<Vec<u8>, ConvertError> {
     let member = ttc_members(input)?
@@ -527,3 +538,4 @@ mod first_face_tests {
         assert_eq!(tables, vec![(*b"AAAA", vec![1, 2, 3, 4])]);
     }
 }
+

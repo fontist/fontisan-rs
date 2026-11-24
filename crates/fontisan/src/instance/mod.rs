@@ -48,6 +48,31 @@ pub fn instance(input: &[u8], coords: &[([u8; 4], f64)]) -> Result<Vec<u8>, Conv
                 .map_err(|e| ConvertError::new(crate::convert::ERROR_CLASS, e.to_string()))?;
             &decoded
         }
+        // Ruby's loader hands the instancer face 0 of a collection; the
+        // member's tables read at their absolute offsets, order preserved
+        // (a rebuild would resort the directory and the instancer's table
+        // walk is order-sensitive).
+        Some(Format::Ttc | Format::Otc) => {
+            let (_, member) = crate::convert::member_tables(input, 0)
+                .map_err(|e| ConvertError::new(crate::convert::ERROR_CLASS, e.message))?;
+            return finish_instance(member, coords);
+        }
+        Some(Format::Woff2Collection) => {
+            let face = crate::sfnt::woff2_view::collection(input, 0)
+                .map_err(|e| ConvertError::new(crate::convert::ERROR_CLASS, format!("{e:?}")))?
+                .map_err(|_| {
+                    ConvertError::new(crate::convert::ERROR_CLASS, "collection index out of range")
+                })?;
+            decoded = face;
+            &decoded
+        }
+        Some(Format::Dfont) => {
+            let (at, len) = crate::dfont::member(input, 0)
+                .map_err(|e| ConvertError::new(e.class.ruby_name(), e.message))?;
+            let end = (at + len).min(input.len());
+            decoded = input[at.min(end)..end].to_vec();
+            &decoded
+        }
         _ => {
             return Err(ConvertError::new(
                 crate::convert::ERROR_CLASS,
@@ -56,6 +81,10 @@ pub fn instance(input: &[u8], coords: &[([u8; 4], f64)]) -> Result<Vec<u8>, Conv
         }
     };
     let (_, tables) = tables_of(raw)?;
+    finish_instance(tables, coords)
+}
+
+fn finish_instance(tables: Tables, coords: &[([u8; 4], f64)]) -> Result<Vec<u8>, ConvertError> {
     if !tables.iter().any(|(t, d)| t == b"fvar" && !d.is_empty()) {
         return Err(ConvertError::new(
             "ArgumentError",
@@ -632,3 +661,4 @@ mod tests {
         }
     }
 }
+
