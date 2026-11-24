@@ -13,7 +13,7 @@ mod bytes;
 mod gvar;
 mod hvar;
 mod name;
-mod outline;
+pub(crate) mod outline;
 
 use crate::convert::{ConvertError, Tables, tables_of, write_font};
 use crate::sfnt::{self, Format};
