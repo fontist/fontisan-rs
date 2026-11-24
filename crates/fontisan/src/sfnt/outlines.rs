@@ -25,16 +25,22 @@ use crate::json::Json;
 pub fn outline_hashes(input: &[u8], index: usize) -> Result<Json, ConvertError> {
     let surface = |e: Error| ConvertError::new(e.class.ruby_name(), e.message.clone());
     let font = Font::load(input, index, super::Options::default()).map_err(surface)?;
-    let Some(outlines) = font.outlines().map_err(surface)? else {
+    // The facade never serves CFF2 here: Ruby's `raw_table` cannot fetch the
+    // CFF2 table, so `outline_data` falls through to nil without walking it
+    // — even a malformed CFF2 (the fuzz corpus's huge-count case) hashes as
+    // nil, because the raise only fires where raw_table works (the read docs
+    // keep the spec-based CFF2 walk for the goldens, TRIAGE: CFF2-PARSER).
+    // This op matches the facade: walk only where Ruby walks.
+    let walks = (font.raw_table_data("glyf").is_some() && font.raw_table_data("loca").is_some())
+        || font.raw_table_data("CFF ").is_some();
+    let Some(outlines) = walks
+        .then(|| font.outlines())
+        .transpose()
+        .map_err(surface)?
+        .flatten()
+    else {
         return Ok(Json::Obj(vec![("kind", Json::Null), ("hashes", Json::Arr(Vec::new()))]));
     };
-    // The facade never serves CFF2 here: Ruby's `raw_table` cannot fetch the
-    // CFF2 table, so `outline_data` falls through to nil (the read docs keep
-    // the spec-based CFF2 walk for the goldens, TRIAGE: CFF2-PARSER — this
-    // op matches the facade instead).
-    if outlines.kind == OutlineKind::Cff2 {
-        return Ok(Json::Obj(vec![("kind", Json::Null), ("hashes", Json::Arr(Vec::new()))]));
-    }
     let hashes = outlines.hashes().iter().map(|h| Json::Str(hex(h))).collect();
     Ok(Json::Obj(vec![
         ("kind", Json::Str(outlines.kind.as_str().to_string())),
