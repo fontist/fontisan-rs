@@ -241,13 +241,16 @@ pub(crate) fn parse_all(data: &[u8]) -> Result<(Vec<&[u8]>, CffState<'_>), Error
     Ok((ix.items.iter().map(|&(s, e)| &data[s..e]).collect(), state))
 }
 
+/// Ruby's CFF-facing message: every walk failure names the table.
+pub(crate) fn wrapped(error: Error) -> Error {
+    if error.class == ErrorClass::CorruptedTable && !error.message.starts_with("Failed to parse") {
+        corrupted(format!("Failed to parse CFF table: {}", error.message))
+    } else {
+        error
+    }
+}
+
 /// The CharStrings INDEX entries, walked exactly like Ruby's `Tables::Cff`.
 pub(crate) fn glyphs(data: &[u8]) -> Result<Vec<&[u8]>, Error> {
-    parse_all(data).map(|(glyphs, _)| glyphs).map_err(|e| {
-        if e.class == ErrorClass::CorruptedTable && !e.message.starts_with("Failed to parse") {
-            corrupted(format!("Failed to parse CFF table: {}", e.message))
-        } else {
-            e
-        }
-    })
+    parse_all(data).map(|(glyphs, _)| glyphs).map_err(wrapped)
 }

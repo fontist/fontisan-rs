@@ -200,7 +200,7 @@ impl Font<'_> {
             }));
         }
         if let Some(data) = self.raw_table_data("CFF ") {
-            let (glyphs, cff) = cff::parse_all(data)?;
+            let (glyphs, cff) = cff::parse_all(data).map_err(cff::wrapped)?;
             return Ok(Some(Outlines {
                 kind: OutlineKind::Cff,
                 glyphs,
