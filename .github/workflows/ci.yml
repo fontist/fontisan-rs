@@ -97,7 +97,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [font_load, font_tables, font_outlines, font_variations, font_layout, woff1, woff2, woff2_collection, audit_loaded, ffi_echo, ffi_convert, ffi_extract, ffi_woff2_encode, ffi_subset, ffi_instance, ffi_read, ffi_audit, ffi_scan, ffi_audit_dir, ffi_header, ffi_glyph_ids]
+        target: [font_load, font_tables, font_outlines, font_variations, font_layout, woff1, woff2, woff2_collection, audit_loaded, ffi_echo, ffi_convert, ffi_extract, ffi_woff2_encode, ffi_subset, ffi_instance, ffi_read, ffi_audit, ffi_scan, ffi_audit_dir, ffi_header, ffi_glyph_ids, ffi_outline_hashes]
     env:
       FUZZ_SECONDS: 60
     steps:

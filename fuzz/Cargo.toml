@@ -119,6 +119,12 @@ name = "ffi_glyph_ids"
 path = "fuzz_targets/ffi_glyph_ids.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "ffi_outline_hashes"
+path = "fuzz_targets/ffi_outline_hashes.rs"
+test = false
+doc = false
 bench = false
 
 [[bin]]
