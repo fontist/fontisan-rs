@@ -34,9 +34,7 @@ pub fn is_dfont(input: &[u8]) -> bool {
             .map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
     };
     match (be32(0), be32(4)) {
-        (Some(data_offset), Some(map_offset)) => {
-            data_offset > 0 && map_offset > data_offset
-        }
+        (Some(data_offset), Some(map_offset)) => data_offset > 0 && map_offset > data_offset,
         _ => false,
     }
 }
@@ -92,8 +90,7 @@ pub fn resources(input: &[u8]) -> Result<Vec<Resource>, Error> {
         let id = u16_at(at)?;
         // id u16, name offset i16, attributes u8, 24-bit data offset, handle u32.
         let b = input.get(at + 5..at + 8).ok_or_else(malformed_walk)?;
-        let data_offset =
-            (usize::from(b[0]) << 16) | (usize::from(b[1]) << 8) | usize::from(b[2]);
+        let data_offset = (usize::from(b[0]) << 16) | (usize::from(b[1]) << 8) | usize::from(b[2]);
         out.push(Resource {
             id,
             at: be32(0)? as usize + data_offset,
@@ -137,4 +134,3 @@ mod tests {
         assert_eq!(rs.len(), 1, "Ruby: sfnt_count == 1");
     }
 }
-

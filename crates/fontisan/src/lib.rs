@@ -9,8 +9,8 @@
 
 pub mod audit;
 mod cffread;
-pub mod dfont;
 pub mod convert;
+pub mod dfont;
 mod error_kind;
 pub use error_kind::ErrorKind;
 pub mod indexability;

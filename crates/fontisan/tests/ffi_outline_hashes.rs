@@ -73,8 +73,7 @@ fn read_document(font: &[u8]) -> Value {
     let raw = payload(r);
     unsafe { fontisan_result_free(out) };
     let (count, _) = (u32::from_be_bytes(raw[..4].try_into().unwrap()), ());
-    let len =
-        u32::from_be_bytes(raw[4..8].try_into().unwrap()) as usize;
+    let len = u32::from_be_bytes(raw[4..8].try_into().unwrap()) as usize;
     let row: Value = serde_json::from_slice(&raw[8..8 + len]).expect("row JSON");
     assert!(count >= 1);
     row
@@ -100,14 +99,22 @@ fn glyf_hashes_match_the_read_documents_digest() {
     let (kind, hashes) = hashes(&font, 0);
     assert_eq!(kind, "glyf");
     assert!(!hashes.is_empty());
-    assert!(hashes.iter().all(|h| h.len() == 64 && h.chars().all(|c| c.is_ascii_hexdigit())));
+    assert!(
+        hashes
+            .iter()
+            .all(|h| h.len() == 64 && h.chars().all(|c| c.is_ascii_hexdigit()))
+    );
 
     // The read document's `outlines.digest` is SHA-256 over the concatenated
     // per-glyph hash bytes: the same lookup this op renders, so the two ops
     // must agree byte-for-byte.
     let doc = read_document(&font);
     let digest = doc["outlines"]["digest"].as_str().expect("digest");
-    assert_eq!(digest_of(&hashes), digest, "per-glyph hashes must compose the digest");
+    assert_eq!(
+        digest_of(&hashes),
+        digest,
+        "per-glyph hashes must compose the digest"
+    );
     let count = doc["outlines"]["count"].as_u64().expect("count");
     assert_eq!(count, hashes.len() as u64);
 }
@@ -121,7 +128,10 @@ fn cff_hashes_on_a_cff_font() {
     assert_eq!(kind, "cff");
     assert!(!hashes.is_empty());
     let doc = read_document(&font);
-    assert_eq!(digest_of(&hashes), doc["outlines"]["digest"].as_str().expect("digest"));
+    assert_eq!(
+        digest_of(&hashes),
+        doc["outlines"]["digest"].as_str().expect("digest")
+    );
 }
 
 #[test]
@@ -132,7 +142,10 @@ fn face_select_on_a_collection() {
     let (kind0, hashes0) = hashes(&font, 0);
     let (_, hashes1) = hashes(&font, 1);
     assert_eq!(kind0, "glyf");
-    assert!(hashes0 != hashes1, "faces of the collection carry their own glyphs");
+    assert!(
+        hashes0 != hashes1,
+        "faces of the collection carry their own glyphs"
+    );
     let (status, out) = outline_hashes(&font, 99);
     assert_eq!(status, FontisanStatus::ConvertFailed as i32);
     let r = unsafe { out.as_ref().expect("error on failure") };

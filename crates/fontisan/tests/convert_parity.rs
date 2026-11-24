@@ -168,7 +168,12 @@ fn via_rust(input: &[u8], op: &str, to: &str, index: usize) -> Got {
         "woff2" => Target::Woff2,
         _ => Target::Woff,
     };
-    match convert::convert(input, target, fontisan::convert::SourceType::Ttc, 1_735_689_600) {
+    match convert::convert(
+        input,
+        target,
+        fontisan::convert::SourceType::Ttc,
+        1_735_689_600,
+    ) {
         Ok(b) => Got::Ok(b, None),
         Err(e) => Got::Err(e.class.into(), e.message),
     }

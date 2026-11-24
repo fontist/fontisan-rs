@@ -39,9 +39,16 @@ pub fn outline_hashes(input: &[u8], index: usize) -> Result<Json, ConvertError> 
         .map_err(surface)?
         .flatten()
     else {
-        return Ok(Json::Obj(vec![("kind", Json::Null), ("hashes", Json::Arr(Vec::new()))]));
+        return Ok(Json::Obj(vec![
+            ("kind", Json::Null),
+            ("hashes", Json::Arr(Vec::new())),
+        ]));
     };
-    let hashes = outlines.hashes().iter().map(|h| Json::Str(hex(h))).collect();
+    let hashes = outlines
+        .hashes()
+        .iter()
+        .map(|h| Json::Str(hex(h)))
+        .collect();
     Ok(Json::Obj(vec![
         ("kind", Json::Str(outlines.kind.as_str().to_string())),
         ("hashes", Json::Arr(hashes)),

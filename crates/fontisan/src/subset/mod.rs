@@ -313,7 +313,10 @@ pub fn glyph_ids_for(
     let font = sfnt::Font::load(
         input,
         0,
-        sfnt::Options { mode: sfnt::LoadingMode::Full, lazy: false },
+        sfnt::Options {
+            mode: sfnt::LoadingMode::Full,
+            lazy: false,
+        },
     )
     .map_err(|e| SubsetError::new(e.class.ruby_name(), e.message.clone()))?;
     // Ruby's `gids_for` raises MissingTableError for an absent cmap (reference.rb).

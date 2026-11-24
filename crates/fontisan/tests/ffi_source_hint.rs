@@ -75,7 +75,11 @@ fn otc_hint_copies_a_same_type_conversion() {
     let (status, out) = convert(&ttc, 5 /* otc */, 2 /* otc */);
     assert_eq!(status, FontisanStatus::Ok as i32);
     let r = unsafe { out.as_ref().expect("payload on success") };
-    assert_eq!(payload(r), ttc, "same source and target type copies the input");
+    assert_eq!(
+        payload(r),
+        ttc,
+        "same source and target type copies the input"
+    );
     unsafe { fontisan_result_free(out) };
 }
 
@@ -87,7 +91,11 @@ fn legacy_hint_keeps_the_ttc_repack() {
     let (status, out) = convert(&ttc, 5 /* otc */, 0);
     assert_eq!(status, FontisanStatus::ConvertFailed as i32);
     let r = unsafe { out.as_ref().expect("error on failure") };
-    assert!(message(r).contains("Cannot detect font format"), "{}", message(r));
+    assert!(
+        message(r).contains("Cannot detect font format"),
+        "{}",
+        message(r)
+    );
     unsafe { fontisan_result_free(out) };
 }
 

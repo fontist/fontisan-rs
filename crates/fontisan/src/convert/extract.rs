@@ -21,7 +21,11 @@ fn unpack_err(msg: impl AsRef<str>) -> ConvertError {
 /// Extract member `index`. The file name carries the extension Ruby derives
 /// from the input path (`.ttc` input → `.ttf`, `.otc` input → `.otf`, #192
 /// gap 7); the caller passes that decision as `source`.
-pub fn extract(input: &[u8], index: usize, source: super::SourceType) -> Result<Extracted, ConvertError> {
+pub fn extract(
+    input: &[u8],
+    index: usize,
+    source: super::SourceType,
+) -> Result<Extracted, ConvertError> {
     if input.get(..4) != Some(b"ttcf") {
         return Err(unpack_err("Not a valid TTC/OTC file (invalid signature)"));
     }
@@ -135,7 +139,8 @@ mod tests {
     #[test]
     fn head_offset_past_the_collection_is_missing_table_data() {
         let ttc = one_table_ttc(b"head", 0xFFFF_FFF0, 54);
-        let err = extract(&ttc, 0, super::super::SourceType::Ttc).expect_err("table behind the offset is missing");
+        let err = extract(&ttc, 0, super::super::SourceType::Ttc)
+            .expect_err("table behind the offset is missing");
         assert_eq!(err.class, "Fontisan::Error");
         assert_eq!(
             err.message,
@@ -150,7 +155,8 @@ mod tests {
         for tag in [b"glyf", b"hmtx"] {
             let probe = one_table_ttc(tag, 0, 4);
             let ttc = one_table_ttc(tag, probe.len() as u32, 4);
-            let err = extract(&ttc, 0, super::super::SourceType::Ttc).expect_err("offset at the end of the file");
+            let err = extract(&ttc, 0, super::super::SourceType::Ttc)
+                .expect_err("offset at the end of the file");
             assert!(err.message.ends_with(&format!(
                 "Missing table data for tag '{}'",
                 std::str::from_utf8(tag).unwrap()
@@ -163,7 +169,21 @@ mod tests {
     #[test]
     fn empty_and_truncated_tables_are_still_written() {
         let probe = one_table_ttc(b"cvt ", 0, 0);
-        assert!(extract(&one_table_ttc(b"cvt ", probe.len() as u32, 0), 0, super::super::SourceType::Ttc).is_ok());
-        assert!(extract(&one_table_ttc(b"cvt ", 12, 4096), 0, super::super::SourceType::Ttc).is_ok());
+        assert!(
+            extract(
+                &one_table_ttc(b"cvt ", probe.len() as u32, 0),
+                0,
+                super::super::SourceType::Ttc
+            )
+            .is_ok()
+        );
+        assert!(
+            extract(
+                &one_table_ttc(b"cvt ", 12, 4096),
+                0,
+                super::super::SourceType::Ttc
+            )
+            .is_ok()
+        );
     }
 }

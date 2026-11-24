@@ -20,9 +20,9 @@ use std::fmt::Write as _;
 use super::ConvertError;
 use crate::cffread;
 use crate::instance::outline::{Component, Outline};
+use crate::sfnt::Error;
 use crate::sfnt::OutlineKind;
 use crate::t2interp::{Interp, Seg};
-use crate::sfnt::Error;
 
 const ERROR_CLASS: &str = "Fontisan::Error";
 
@@ -59,8 +59,8 @@ fn round(v: f64) -> i64 {
 pub fn generate(input: &[u8]) -> Result<Vec<u8>, ConvertError> {
     // The loader's error surface first: Ruby's ConvertCommand loads the font
     // through FontLoader before the generator validates anything.
-    let font = crate::sfnt::Font::load(input, 0, crate::sfnt::Options::default())
-        .map_err(surface)?;
+    let font =
+        crate::sfnt::Font::load(input, 0, crate::sfnt::Options::default()).map_err(surface)?;
 
     // SvgGenerator#validate, in its order.
     for tag in ["head", "hhea", "maxp", "cmap"] {
@@ -159,7 +159,9 @@ pub fn generate(input: &[u8]) -> Result<Vec<u8>, ConvertError> {
         };
         // Ruby: the outline object nil → no element; contours empty → an
         // element without a `d`; a raise → the whole glyph skipped.
-        let Ok(Some(contours)) = contours else { continue };
+        let Ok(Some(contours)) = contours else {
+            continue;
+        };
 
         let path = path_data(&contours, &flip, ascent as f64);
         let mut attrs = String::new();
@@ -280,7 +282,14 @@ fn component_matrix(c: &Component) -> (f64, f64, f64, f64, f64, f64) {
             arg2,
         )
     } else if c.flags & HAVE_XY_SCALE != 0 {
-        (f2(&c.transform[0..2]), 0.0, 0.0, f2(&c.transform[2..4]), arg1, arg2)
+        (
+            f2(&c.transform[0..2]),
+            0.0,
+            0.0,
+            f2(&c.transform[2..4]),
+            arg1,
+            arg2,
+        )
     } else if c.flags & HAVE_SCALE != 0 {
         let s = f2(&c.transform[0..2]);
         (s, 0.0, 0.0, s, arg1, arg2)

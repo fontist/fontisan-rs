@@ -71,8 +71,8 @@ fn one_member_ttc(font: &[u8]) -> Vec<u8> {
 
 #[test]
 fn instances_face_zero_of_a_wrapped_collection() {
-    let Some(font) = corpus()
-        .and_then(|c| std::fs::read(c.join("fonts/NotoSans[wdth,wght].ttf")).ok())
+    let Some(font) =
+        corpus().and_then(|c| std::fs::read(c.join("fonts/NotoSans[wdth,wght].ttf")).ok())
     else {
         return;
     };
@@ -81,19 +81,25 @@ fn instances_face_zero_of_a_wrapped_collection() {
     let (status_b, b) = instance(&ttc, *b"wght", 500.0);
     assert_eq!(status_a, FontisanStatus::Ok as i32, "raw font failed");
     assert_eq!(status_b, FontisanStatus::Ok as i32, "wrapped ttc failed");
-    let (bytes_a, bytes_b) = (payload(unsafe { a.as_ref().unwrap() }), payload(unsafe { b.as_ref().unwrap() }));
+    let (bytes_a, bytes_b) = (
+        payload(unsafe { a.as_ref().unwrap() }),
+        payload(unsafe { b.as_ref().unwrap() }),
+    );
     unsafe {
         fontisan_result_free(a);
         fontisan_result_free(b);
     }
-    assert_eq!(bytes_a, bytes_b, "the wrapped face instances to the same bytes");
+    assert_eq!(
+        bytes_a, bytes_b,
+        "the wrapped face instances to the same bytes"
+    );
     assert!(!bytes_a.is_empty());
 }
 
 #[test]
 fn glyph_ids_run_face_zero_of_a_wrapped_collection() {
-    let Some(font) = corpus()
-        .and_then(|c| std::fs::read(c.join("fonts/NotoSans-Regular.ttf")).ok())
+    let Some(font) =
+        corpus().and_then(|c| std::fs::read(c.join("fonts/NotoSans-Regular.ttf")).ok())
     else {
         return;
     };
@@ -103,7 +109,10 @@ fn glyph_ids_run_face_zero_of_a_wrapped_collection() {
     let (status_b, b) = glyph_ids(&ttc, name, &[65, 66]);
     assert_eq!(status_a, FontisanStatus::Ok as i32);
     assert_eq!(status_b, FontisanStatus::Ok as i32);
-    let (bytes_a, bytes_b) = (payload(unsafe { a.as_ref().unwrap() }), payload(unsafe { b.as_ref().unwrap() }));
+    let (bytes_a, bytes_b) = (
+        payload(unsafe { a.as_ref().unwrap() }),
+        payload(unsafe { b.as_ref().unwrap() }),
+    );
     unsafe {
         fontisan_result_free(a);
         fontisan_result_free(b);

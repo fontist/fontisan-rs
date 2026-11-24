@@ -538,4 +538,3 @@ mod first_face_tests {
         assert_eq!(tables, vec![(*b"AAAA", vec![1, 2, 3, 4])]);
     }
 }
-

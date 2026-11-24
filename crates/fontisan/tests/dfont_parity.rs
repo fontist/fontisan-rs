@@ -58,7 +58,11 @@ fn read_and_outline_hashes_match_the_captured_goldens() {
     };
     // Reference.read rows (captured from the Ruby tier, metadata+lazy —
     // Ruby's dfont collection path defaults the face read to metadata mode).
-    let (status, out) = call(&request(OP_READ, &font, READ_FLAG_METADATA | READ_FLAG_LAZY));
+    let (status, out) = call(&request(
+        OP_READ,
+        &font,
+        READ_FLAG_METADATA | READ_FLAG_LAZY,
+    ));
     assert_eq!(status, FontisanStatus::Ok as i32);
     let r = unsafe { out.as_ref().expect("payload") };
     let docs = rows(r);
@@ -72,7 +76,10 @@ fn read_and_outline_hashes_match_the_captured_goldens() {
     // The whole read document, when the captured golden is present.
     if let Ok(golden) = std::fs::read("/tmp/dfont-read.json") {
         let golden: Value = serde_json::from_slice(&golden).unwrap();
-        assert_eq!(docs[0], golden[0], "the full read document must match Ruby's");
+        assert_eq!(
+            docs[0], golden[0],
+            "the full read document must match Ruby's"
+        );
     }
 
     // Reference.outline_hashes (captured from the Ruby tier).
@@ -82,10 +89,9 @@ fn read_and_outline_hashes_match_the_captured_goldens() {
     let (status, out) = call(&request(OP_OUTLINE_HASHES, &input, 0));
     assert_eq!(status, FontisanStatus::Ok as i32);
     let r = unsafe { out.as_ref().expect("payload") };
-    let json: Value = serde_json::from_slice(unsafe {
-        std::slice::from_raw_parts(r.payload, r.payload_len)
-    })
-    .unwrap();
+    let json: Value =
+        serde_json::from_slice(unsafe { std::slice::from_raw_parts(r.payload, r.payload_len) })
+            .unwrap();
     unsafe { fontisan_result_free(out) };
     let golden: Value =
         serde_json::from_slice(&std::fs::read("/tmp/dfont-outline.json").unwrap_or_default())

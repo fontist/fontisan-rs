@@ -8,7 +8,11 @@ use common::corpus;
 
 fn engine_svg(font: &[u8]) -> Result<Vec<u8>, String> {
     let (status, payload_or_error) = engine_svg_raw(font);
-    assert_eq!(status, fontisan::ffi::FontisanStatus::Ok as i32, "{payload_or_error}");
+    assert_eq!(
+        status,
+        fontisan::ffi::FontisanStatus::Ok as i32,
+        "{payload_or_error}"
+    );
     Ok(payload_or_error.into_bytes())
 }
 
@@ -64,8 +68,14 @@ fn matches_the_ruby_goldens() {
             "SourceSans3-Regular.otf.woff",
             "/tmp/golden-SourceSans3-Regular.otf.woff.svg",
         ),
-        ("SourceSans3-Regular.otf", "/tmp/g2-SourceSans3-Regular.otf.svg"),
-        ("SourceSans3-Regular.ttf", "/tmp/g2-SourceSans3-Regular.ttf.svg"),
+        (
+            "SourceSans3-Regular.otf",
+            "/tmp/g2-SourceSans3-Regular.otf.svg",
+        ),
+        (
+            "SourceSans3-Regular.ttf",
+            "/tmp/g2-SourceSans3-Regular.ttf.svg",
+        ),
         (
             "SourceSans3-Regular.ttf.woff2",
             "/tmp/g2-SourceSans3-Regular.ttf.woff2.svg",
@@ -74,7 +84,10 @@ fn matches_the_ruby_goldens() {
             "MonaSansVF[wdth,wght,opsz,ital].ttf",
             "/tmp/g2-MonaSansVF_wdth_wght_opsz_ital_.ttf.svg",
         ),
-        ("NotoSans[wdth,wght].ttf", "/tmp/g2-NotoSans_wdth_wght_.ttf.svg"),
+        (
+            "NotoSans[wdth,wght].ttf",
+            "/tmp/g2-NotoSans_wdth_wght_.ttf.svg",
+        ),
         ("TestTTF.ttf", "/tmp/g2-fonttools_test_ttf.svg"),
         ("TestOTF.otf", "/tmp/g2-fonttools_test_otf.svg"),
         ("SourceSans3VF-Italic.ttf", "/tmp/g2-ss3vf_italic.svg"),
@@ -82,8 +95,12 @@ fn matches_the_ruby_goldens() {
     ];
     let mut checked = 0;
     for (font_name, golden_path) in cases {
-        let Some(font) = corpus_font(font_name) else { continue };
-        let Ok(golden) = std::fs::read(golden_path) else { continue };
+        let Some(font) = corpus_font(font_name) else {
+            continue;
+        };
+        let Ok(golden) = std::fs::read(golden_path) else {
+            continue;
+        };
         let got = engine_svg(&font).unwrap_or_else(|e| panic!("{font_name}: {e}"));
         if got != golden {
             for (i, (a, b)) in got.iter().zip(golden.iter()).enumerate() {

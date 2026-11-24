@@ -8,8 +8,8 @@
 mod collection;
 mod extract;
 mod outline_o2t;
-mod svg;
 mod outline_t2o;
+mod svg;
 mod woff1;
 mod writer;
 

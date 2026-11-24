@@ -173,8 +173,13 @@ fn subr_self_recursion_fails_fast_in_every_consumer() {
     sub.push(29);
     let f = font(2000, &calls_subr0(2000), &[sub]);
     let t = std::time::Instant::now();
-    let c = fontisan::convert::convert(&f, fontisan::convert::Target::Ttf, fontisan::convert::SourceType::Ttc, 0)
-        .expect_err("recursion is an error");
+    let c = fontisan::convert::convert(
+        &f,
+        fontisan::convert::Target::Ttf,
+        fontisan::convert::SourceType::Ttc,
+        0,
+    )
+    .expect_err("recursion is an error");
     assert!(c.message.contains("too deep"), "{}", c.message);
     let s = fontisan::subset::subset(&f, &[1], "web").expect_err("recursion is an error");
     assert!(s.message.contains("too deep"), "{}", s.message);
@@ -203,8 +208,13 @@ fn total_charstring_work_is_bounded_per_font() {
     let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let f = nop_font(200); // 200 M operators if unbounded
     let t = std::time::Instant::now();
-    let e = fontisan::convert::convert(&f, fontisan::convert::Target::Ttf, fontisan::convert::SourceType::Ttc, 0)
-        .expect_err("a font-wide budget stops it");
+    let e = fontisan::convert::convert(
+        &f,
+        fontisan::convert::Target::Ttf,
+        fontisan::convert::SourceType::Ttc,
+        0,
+    )
+    .expect_err("a font-wide budget stops it");
     assert!(e.message.contains("operation budget"), "{}", e.message);
     let e = fontisan::subset::subset(&f, &[1], "web").expect_err("and the subsetter");
     assert!(e.message.contains("operation budget"), "{}", e.message);
@@ -216,6 +226,12 @@ fn a_font_inside_the_budget_still_converts_glyph_by_glyph() {
     let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let f = nop_font(20);
     // Past the charstrings the rebuilt font lacks `post`; that error is not the budget.
-    let e = fontisan::convert::convert(&f, fontisan::convert::Target::Ttf, fontisan::convert::SourceType::Ttc, 0).unwrap_err();
+    let e = fontisan::convert::convert(
+        &f,
+        fontisan::convert::Target::Ttf,
+        fontisan::convert::SourceType::Ttc,
+        0,
+    )
+    .unwrap_err();
     assert!(!e.message.contains("operation budget"), "{}", e.message);
 }

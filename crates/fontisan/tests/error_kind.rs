@@ -90,7 +90,13 @@ fn out_of_range_coordinate_is_invalid_coordinates() {
 
 #[test]
 fn convert_subset_and_read_errors_have_kinds() {
-    let e = convert::convert(b"not a font at all......", convert::Target::Woff, fontisan::convert::SourceType::Ttc, 0).unwrap_err();
+    let e = convert::convert(
+        b"not a font at all......",
+        convert::Target::Woff,
+        fontisan::convert::SourceType::Ttc,
+        0,
+    )
+    .unwrap_err();
     assert_eq!(e.kind(), ErrorKind::from_class(e.class));
     let e = subset::subset(&[0; 12], &[1], "pdf").unwrap_err();
     assert_eq!(e.kind(), ErrorKind::from_class(e.class));
