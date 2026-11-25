@@ -26,7 +26,9 @@ use crate::json::Json;
 /// facade's load error (the read ops' Ruby class + message surface).
 pub fn outline_hashes(input: &[u8], index: usize) -> Result<Json, ConvertError> {
     let surface = |e: Error| ConvertError::new(e.class.ruby_name(), e.message.clone());
-    let font = Font::load(input, index, super::Options::default()).map_err(surface)?;
+    let font = Font::load(input, index, super::Options::default())
+        .map_err(crate::t1::read_surface_if_type1)
+        .map_err(surface)?;
     // The facade never serves CFF2 here: Ruby's `raw_table` cannot fetch the
     // CFF2 table, so `outline_data` falls through to nil without walking it
     // — even a malformed CFF2 (the fuzz corpus's huge-count case) hashes as
