@@ -245,6 +245,20 @@ pub fn audit_staged(
     source_file: &str,
     validate: bool,
 ) -> Result<Vec<Report>, (Error, Stage)> {
+    audit_staged_for(bytes, source_file, validate, false)
+}
+
+/// `dir` marks the audit_dir path: Ruby's directory walk rescues the Type 1
+/// per-check exceptions into issue rows, which the engine cannot port yet —
+/// its tolerated row there is "unsupported", driven by mapping the Type 1
+/// sentinel to Unsupported. The plain audit op raises the surface instead
+/// (Ruby's `Reference.audit` does).
+pub fn audit_staged_for(
+    bytes: &[u8],
+    source_file: &str,
+    validate: bool,
+    dir: bool,
+) -> Result<Vec<Report>, (Error, Stage)> {
     let opts = Options {
         mode: LoadingMode::Full,
         lazy: false,
@@ -252,7 +266,13 @@ pub fn audit_staged(
     let is_collection = detect_format(bytes).is_some_and(|f| f.is_collection());
     let sha = std::cell::OnceCell::new();
     let one = |i: usize, index: Option<usize>, num: usize| {
-        let face = Font::load(bytes, i, opts).map_err(|e| (e, Stage::Load))?;
+        let face = Font::load(bytes, i, opts)
+            .map_err(|e| if dir && crate::t1::is_sentinel(&e) {
+                Error::new(crate::sfnt::ErrorClass::Unsupported, "Type 1")
+            } else {
+                crate::t1::read_surface_if_type1(e)
+            })
+            .map_err(|e| (e, Stage::Load))?;
         let sha = sha.get_or_init(|| file_sha256(bytes));
         build_report(&face, bytes, sha, source_file, index, num, validate)
             .map_err(|e| (e, Stage::Report))

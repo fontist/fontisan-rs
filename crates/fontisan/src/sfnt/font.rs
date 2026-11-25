@@ -289,10 +289,17 @@ impl<'a> Font<'a> {
             Format::Woff | Format::Woff2 | Format::Woff2Collection => {
                 Self::load_woff(bytes, format, font_index, options)
             }
-            other => Err(Error::new(
-                ErrorClass::Unsupported,
-                format!("{} is not read by the native sfnt engine", other.as_str()),
-            )),
+            // Type 1 (fontisan#192 gap 4): the loader parses a PFB's segments
+            // (or accepts any detected PFA) into a Type 1 object, and the ops
+            // map that sentinel to Ruby's measured post-parse surfaces. A
+            // segment-walk failure is the parser's own surface.
+            Format::Pfb => {
+                crate::t1::parse_pfb(bytes)?;
+                Err(crate::t1::parsed())
+            }
+            Format::Pfa => Err(crate::t1::parsed()),
+            // Every Format variant is matched above; Type 1 is the sentinel
+            // path (fontisan#192 gap 4) and dfont/WOFF pre-date it.
         }
     }
 

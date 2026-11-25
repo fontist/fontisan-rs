@@ -73,6 +73,14 @@ pub fn instance(input: &[u8], coords: &[([u8; 4], f64)]) -> Result<Vec<u8>, Conv
             decoded = input[at.min(end)..end].to_vec();
             &decoded
         }
+        Some(Format::Pfa | Format::Pfb) => {
+            crate::t1::parse_pfb_ok_or_fail(input)?;
+            return Err(ConvertError::new(
+                crate::sfnt::ErrorClass::InvalidFont.ruby_name(),
+                "Malformed font data (NoMethodError): undefined method 'table_data' \
+                 for an instance of Fontisan::Type1Font",
+            ));
+        }
         _ => {
             return Err(ConvertError::new(
                 crate::convert::ERROR_CLASS,

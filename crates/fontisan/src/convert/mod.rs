@@ -345,6 +345,17 @@ pub fn convert(
     let format = sfnt::detect_format(input);
     // 1h-coll: collection sources (ttcf, or a WOFF2 with the ttcf flavor).
     let woff2_collection = input.starts_with(b"wOF2") && input.get(4..8) == Some(b"ttcf");
+    if matches!(format, Some(Format::Pfa | Format::Pfb)) {
+        if format == Some(Format::Pfb) {
+            if let Err(e) = crate::t1::parse_pfb(input) {
+                return Err(ConvertError::new(e.class.ruby_name(), e.message));
+            }
+        }
+        // Ruby's FormatConverter hits `table_data` on the Type 1 object.
+        return Err(ConvertError::transform(
+            "undefined method 'table_data' for an instance of Fontisan::Type1Font",
+        ));
+    }
     if format == Some(Format::Dfont) {
         // Ruby routes a dfont source through CollectionConverter, which
         // rejects single-font targets; the collection targets fail inside

@@ -377,7 +377,8 @@ pub fn read(bytes: &[u8], options: Options) -> Result<Vec<Json>, Error> {
     let mut digests = TableDigests::default();
     (0..faces)
         .map(|i| {
-            let font = Font::load(bytes, i, options)?;
+            let font = Font::load(bytes, i, options)
+                .map_err(crate::t1::read_surface_if_type1)?;
             read_face_hashed(&file_sha256, &mut digests, &font, i)
         })
         .collect()

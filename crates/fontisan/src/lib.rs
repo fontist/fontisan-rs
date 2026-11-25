@@ -19,6 +19,7 @@ pub mod json;
 pub mod read;
 pub mod scan;
 pub mod sfnt;
+mod t1;
 pub mod subset;
 mod t2interp;
 

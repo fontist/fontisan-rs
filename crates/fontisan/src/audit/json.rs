@@ -139,7 +139,7 @@ pub fn dir_row(path: &std::path::Path, validate: bool) -> Json {
             ]);
         }
     };
-    match super::audit_staged(&bytes, &source, validate) {
+    match super::audit_staged_for(&bytes, &source, validate, true) {
         Ok(reports) => obj! {
             "path" => name,
             "status" => "ok",
