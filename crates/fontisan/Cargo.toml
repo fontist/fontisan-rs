@@ -27,7 +27,7 @@ read-fonts = "=0.46.0"
 miniz_oxide = { version = "=0.8.9", default-features = false, features = ["with-alloc"] }
 # WOFF encode compresses with the same libz the Ruby tier links (Zlib::Deflate
 # level 6), so the tiers' bytes are identical; miniz stays for inflate.
-flate2 = { version = "1", default-features = false, features = ["zlib"] }
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 brotli-decompressor = { version = "=5.0.3", default-features = false, features = ["std"] }
 # WOFF2 encode (1h): pure-Rust Brotli encoder (the decoder above is already in the graph).
 brotli = { version = "=8.0.4", default-features = false, features = ["std"] }
