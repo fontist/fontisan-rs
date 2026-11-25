@@ -19,8 +19,8 @@ pub mod json;
 pub mod read;
 pub mod scan;
 pub mod sfnt;
-mod t1;
 pub mod subset;
+mod t1;
 mod t2interp;
 
 #[cfg(feature = "ffi")]
