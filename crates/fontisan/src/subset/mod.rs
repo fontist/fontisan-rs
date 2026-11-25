@@ -318,6 +318,7 @@ pub fn glyph_ids_for(
             lazy: false,
         },
     )
+    .map_err(crate::t1::glyph_surface_if_type1)
     .map_err(|e| SubsetError::new(e.class.ruby_name(), e.message.clone()))?;
     // Ruby's `gids_for` raises MissingTableError for an absent cmap (reference.rb).
     let map: std::collections::BTreeMap<u32, u32> = match font.cmap() {

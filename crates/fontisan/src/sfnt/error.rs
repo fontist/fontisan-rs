@@ -20,9 +20,12 @@ pub enum ErrorClass {
     CorruptedTable,
     /// `Fontisan::Reference::TableDigests::Truncated` (the CFF2 charstring walk).
     Truncated,
-    /// A format the native engine does not read (WOFF/WOFF2 before 1e, dfont,
-    /// Type 1): the caller routes it elsewhere. Not a Ruby class.
+    /// A format the native engine does not read (WOFF/WOFF2 before 1e): the
+    /// caller routes it elsewhere. Not a Ruby class.
     Unsupported,
+    /// Plain `Fontisan::Error` — the loader's own PFB parse failures carry it,
+    /// and the Type 1 sentinel (#192 gap 4) is built on it.
+    Facade,
 }
 
 impl ErrorClass {
@@ -38,6 +41,7 @@ impl ErrorClass {
             Self::CorruptedTable => "Fontisan::CorruptedTableError",
             Self::Truncated => "Fontisan::Reference::TableDigests::Truncated",
             Self::Unsupported => "Fontisan::UnsupportedFormat",
+            Self::Facade => "Fontisan::Error",
         }
     }
 }
