@@ -8,7 +8,9 @@ pub(crate) mod ruby;
 pub mod types;
 
 pub use json::{command_error_json, dir_row};
-pub use report::{Axis, Report, Stage, Summary, audit, audit_staged, audit_staged_for, build_report};
+pub use report::{
+    Axis, Report, Stage, Summary, audit, audit_staged, audit_staged_for, build_report,
+};
 pub use types::{CheckError, CheckFn, Issue, Severity};
 
 use crate::sfnt::Font;

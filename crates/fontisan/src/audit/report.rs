@@ -267,10 +267,12 @@ pub fn audit_staged_for(
     let sha = std::cell::OnceCell::new();
     let one = |i: usize, index: Option<usize>, num: usize| {
         let face = Font::load(bytes, i, opts)
-            .map_err(|e| if dir && crate::t1::is_sentinel(&e) {
-                Error::new(crate::sfnt::ErrorClass::Unsupported, "Type 1")
-            } else {
-                crate::t1::read_surface_if_type1(e)
+            .map_err(|e| {
+                if dir && crate::t1::is_sentinel(&e) {
+                    Error::new(crate::sfnt::ErrorClass::Unsupported, "Type 1")
+                } else {
+                    crate::t1::read_surface_if_type1(e)
+                }
             })
             .map_err(|e| (e, Stage::Load))?;
         let sha = sha.get_or_init(|| file_sha256(bytes));
