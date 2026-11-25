@@ -8,7 +8,7 @@ use std::process::Command;
 
 /// fontist/fontisan PR #162 (issue-156/phase2-prep): Ruby-tier large goldens and the engine pin to this crate. Bumped when goldens land.
 const FONTISAN_REPO: &str = "https://github.com/fontist/fontisan.git";
-const FONTISAN_SHA: &str = "91beb5b9910fdc0ad1e759078ad5af51e84a46fc";
+const FONTISAN_SHA: &str = "02983d3a66cdee180cc61b0e12e763a27bce0575";
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
