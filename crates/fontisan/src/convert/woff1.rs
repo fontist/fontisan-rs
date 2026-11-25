@@ -87,14 +87,3 @@ mod tests {
         assert_eq!(tags, [&b"OS/2"[..], b"head", b"loca"]);
     }
 }
-
-/// zlib-format DEFLATE at level 6 through flate2's libz backend - the same
-/// library, level and defaults as the Ruby tier's `Zlib::Deflate.deflate(data,
-/// 6)`, so the WOFF bytes are identical whichever tier serves the conversion.
-fn zlib_deflate(data: &[u8]) -> Vec<u8> {
-    use std::io::Write;
-
-    let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::new(6));
-    encoder.write_all(data).expect("in-memory deflate");
-    encoder.finish().expect("in-memory deflate")
-}
