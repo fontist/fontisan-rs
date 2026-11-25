@@ -103,7 +103,11 @@ impl Pfb<'_> {
             self.psname,
             self.fontinfo.len(),
             fontinfo,
-            self.bbox.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(" "),
+            self.bbox
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<_>>()
+                .join(" "),
         )
         .into_bytes()
     }

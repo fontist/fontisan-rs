@@ -5,9 +5,8 @@
 //! bytecode (hsbw prefix, walk, endchar) - then assemble the canonical PFB
 //! with the source's names, FontInfo, Private entries and scaled FontBBox.
 
-use crate::convert::t1write::{encode_number, Pfb};
 use crate::convert::ConvertError;
-
+use crate::convert::t1write::{Pfb, encode_number};
 
 const HSBW_ESCAPE: u8 = 12;
 const HSBW_OP: u8 = 34;
@@ -103,7 +102,9 @@ fn parse_charstring(data: &[u8]) -> Vec<Op> {
         i += 1;
         if b0 <= 31 && b0 != 28 {
             let name = if b0 == 12 {
-                let Some(&b1) = data.get(i) else { break };
+                if data.get(i).is_none() {
+                    break;
+                }
                 i += 1;
                 // Escape operators are outside the converter's vocabulary;
                 // they carry no mask or stems.
@@ -111,14 +112,20 @@ fn parse_charstring(data: &[u8]) -> Vec<Op> {
             } else {
                 name_of(u32::from(b0))
             };
-            if matches!(name, OpName::Hstem | OpName::Vstem | OpName::Hstemhm | OpName::Vstemhm) {
+            if matches!(
+                name,
+                OpName::Hstem | OpName::Vstem | OpName::Hstemhm | OpName::Vstemhm
+            ) {
                 stems += operands.len() / 2;
             }
             if name == OpName::Hintmask {
                 let mask = (stems + 7) / 8;
                 i += mask;
             }
-            ops.push(Op { name, operands: std::mem::take(&mut operands) });
+            ops.push(Op {
+                name,
+                operands: std::mem::take(&mut operands),
+            });
         } else {
             let Some((value, consumed)) = read_number(&data[i.saturating_sub(1)..]) else {
                 break;
@@ -133,23 +140,22 @@ fn parse_charstring(data: &[u8]) -> Vec<Op> {
 /// CFF number encodings (byte offsets relative to the first byte).
 fn read_number(data: &[u8]) -> Option<(i64, usize)> {
     match data.first()? {
-        28 if data.len() >= 3 => {
-            Some((i16::from_be_bytes([data[1], data[2]]) as i64, 3))
-        }
-        29 if data.len() >= 5 => {
-            Some((i32::from_be_bytes([data[1], data[2], data[3], data[4]]) as i64, 5))
-        }
+        28 if data.len() >= 3 => Some((i16::from_be_bytes([data[1], data[2]]) as i64, 3)),
+        29 if data.len() >= 5 => Some((
+            i32::from_be_bytes([data[1], data[2], data[3], data[4]]) as i64,
+            5,
+        )),
         32..=246 => Some((i64::from(data[0]) - 139, 1)),
         247..=250 if data.len() >= 2 => {
             Some((i64::from(data[0] - 247) * 256 + i64::from(data[1]) + 108, 2))
         }
         251..=254 if data.len() >= 2 => {
-            Some(-(i64::from(data[0] - 251) * 256 + i64::from(data[1]) + 108))
-                .map(|v| (v, 2))
+            Some(-(i64::from(data[0] - 251) * 256 + i64::from(data[1]) + 108)).map(|v| (v, 2))
         }
-        255 if data.len() >= 5 => {
-            Some((i32::from_be_bytes([data[1], data[2], data[3], data[4]]) as i64, 5))
-        }
+        255 if data.len() >= 5 => Some((
+            i32::from_be_bytes([data[1], data[2], data[3], data[4]]) as i64,
+            5,
+        )),
         _ => None,
     }
 }
@@ -168,7 +174,11 @@ fn rational_round(num: i64, den: i64) -> i64 {
 /// font units (Ruby's `apply_scale!`).
 fn apply_scale(ops: &mut [Op], num: i64, den: i64) {
     for op in ops.iter_mut() {
-        op.operands = op.operands.iter().map(|v| rational_round(v * num, den)).collect();
+        op.operands = op
+            .operands
+            .iter()
+            .map(|v| rational_round(v * num, den))
+            .collect();
     }
 }
 
@@ -180,7 +190,11 @@ fn extract_width(ops: &[Op], default_width: i64) -> i64 {
     let Some(idx) = ops.iter().position(|op| {
         matches!(
             op.name,
-            OpName::Rmoveto | OpName::Hmoveto | OpName::Vmoveto | OpName::Rcurveline | OpName::Rrcurveto
+            OpName::Rmoveto
+                | OpName::Hmoveto
+                | OpName::Vmoveto
+                | OpName::Rcurveline
+                | OpName::Rrcurveto
         )
     }) else {
         return default_width;
@@ -207,7 +221,11 @@ fn convert_operations(ops: &[Op], width: i64, scaled: bool) -> Vec<u8> {
         if let Some(idx) = ops.iter().position(|op| {
             matches!(
                 op.name,
-                OpName::Rmoveto | OpName::Hmoveto | OpName::Vmoveto | OpName::Rcurveline | OpName::Rrcurveto
+                OpName::Rmoveto
+                    | OpName::Hmoveto
+                    | OpName::Vmoveto
+                    | OpName::Rcurveline
+                    | OpName::Rrcurveto
             )
         }) {
             let before: usize = ops[..idx].iter().map(|op| op.operands.len()).sum();
@@ -294,7 +312,10 @@ fn convert_operations(ops: &[Op], width: i64, scaled: bool) -> Vec<u8> {
                 }
                 first_move = false;
             }
-            OpName::Hhcurveto | OpName::Hvcurveto | OpName::Vhcurveto | OpName::Rcurveline
+            OpName::Hhcurveto
+            | OpName::Hvcurveto
+            | OpName::Vhcurveto
+            | OpName::Rcurveline
             | OpName::Rlinecurve => {
                 for val in &op.operands {
                     out.extend_from_slice(&encode_number(*val as i32));
@@ -344,7 +365,7 @@ fn subr_op_code(name: OpName) -> u8 {
 
 /// The otf → type1 conversion: the PFB bytes for an OTF source, mirroring
 /// Ruby's `Type1Converter#convert_otf_to_type1` + `build_type1_data`.
-pub fn otf_to_type1(_tables: &[( [u8; 4], Vec<u8>)]) -> Result<Vec<u8>, ConvertError> {
+pub fn otf_to_type1(_tables: &[([u8; 4], Vec<u8>)]) -> Result<Vec<u8>, ConvertError> {
     let _ = Pfb {
         psname: "",
         version: "1.0",
