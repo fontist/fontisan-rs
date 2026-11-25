@@ -5,6 +5,9 @@
 //! bytecode (hsbw prefix, walk, endchar) - then assemble the canonical PFB
 //! with the source's names, FontInfo, Private entries and scaled FontBBox.
 
+// The converters are groundwork: the parity iteration wires the remaining callers.
+#![allow(dead_code)]
+
 use crate::convert::ConvertError;
 use crate::convert::t1write::{Pfb, encode_number};
 
@@ -119,7 +122,7 @@ fn parse_charstring(data: &[u8]) -> Vec<Op> {
                 stems += operands.len() / 2;
             }
             if name == OpName::Hintmask {
-                let mask = (stems + 7) / 8;
+                let mask = stems.div_ceil(8);
                 i += mask;
             }
             ops.push(Op {

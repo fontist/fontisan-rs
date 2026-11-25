@@ -3,6 +3,9 @@
 //! Ruby's deterministic encryption - the eexec and CharString ciphers
 //! prepend fixed lenIV bytes (`0x00`), so two runs produce identical bytes.
 
+// The converters are groundwork: the parity iteration wires the remaining callers.
+#![allow(dead_code)]
+
 use crate::convert::ConvertError;
 
 const EEXEC_KEY: u16 = 55_665;
