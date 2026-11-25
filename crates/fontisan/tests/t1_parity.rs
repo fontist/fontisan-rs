@@ -41,14 +41,11 @@ fn corpus_font(name: &str) -> Option<Vec<u8>> {
     std::fs::read(corpus()?.join("fonts").join(name)).ok()
 }
 
-const HAS_TABLE: &str =
-    "Fontisan::InvalidFontError: Malformed font data (NoMethodError): undefined method \
+const HAS_TABLE: &str = "Fontisan::InvalidFontError: Malformed font data (NoMethodError): undefined method \
      'has_table?' for an instance of Fontisan::Type1Font";
-const TABLE: &str =
-    "Fontisan::InvalidFontError: Malformed font data (NoMethodError): undefined method \
+const TABLE: &str = "Fontisan::InvalidFontError: Malformed font data (NoMethodError): undefined method \
      'table' for an instance of Fontisan::Type1Font";
-const TABLE_DATA: &str =
-    "Fontisan::InvalidFontError: Malformed font data (NoMethodError): undefined method \
+const TABLE_DATA: &str = "Fontisan::InvalidFontError: Malformed font data (NoMethodError): undefined method \
      'table_data' for an instance of Fontisan::Type1Font";
 
 #[test]
@@ -57,14 +54,24 @@ fn read_audit_and_outline_surfaces_name_has_table() {
         return;
     };
     // OP_READ: the ReadFailed row carries the facade's message.
-    let (status, out) = call(&request(OP_READ, &font, READ_FLAG_METADATA | READ_FLAG_LAZY));
+    let (status, out) = call(&request(
+        OP_READ,
+        &font,
+        READ_FLAG_METADATA | READ_FLAG_LAZY,
+    ));
     assert_eq!(status, FontisanStatus::ReadFailed as i32);
     let r = unsafe { out.as_ref().unwrap() };
     let text = message(r);
     unsafe { fontisan_result_free(out) };
-    assert!(text.contains("InvalidTrueTypeFont") || text.contains("has_table?"), "{text}");
+    assert!(
+        text.contains("InvalidTrueTypeFont") || text.contains("has_table?"),
+        "{text}"
+    );
     // The read document's error JSON: class InvalidFontError + the surface.
-    assert!(text.contains("\"class\":\"Fontisan::InvalidFontError\""), "{text}");
+    assert!(
+        text.contains("\"class\":\"Fontisan::InvalidFontError\""),
+        "{text}"
+    );
     assert!(text.contains("undefined method 'has_table?'"), "{text}");
 
     // OP_AUDIT: the same surface through the audit op.
@@ -189,13 +196,15 @@ fn audit_dir_keeps_the_tolerated_unsupported_row() {
     let dir = std::env::temp_dir().join(format!("fontisan-t1-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("t.pfb"), &font).unwrap();
-    let (status, out) = call(
-        &request(OP_AUDIT_DIR, dir.to_string_lossy().as_bytes(), 0),
-    );
+    let (status, out) = call(&request(OP_AUDIT_DIR, dir.to_string_lossy().as_bytes(), 0));
     assert_eq!(status, FontisanStatus::Ok as i32);
     let r = unsafe { out.as_ref().unwrap() };
     let raw = payload(r);
     unsafe { fontisan_result_free(out) };
     std::fs::remove_dir_all(&dir).unwrap();
-    assert!(raw.windows(22).any(|w| w == b"\"status\":\"unsupported\""), "{}", String::from_utf8_lossy(&raw));
+    assert!(
+        raw.windows(22).any(|w| w == b"\"status\":\"unsupported\""),
+        "{}",
+        String::from_utf8_lossy(&raw)
+    );
 }
