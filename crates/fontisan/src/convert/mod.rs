@@ -10,6 +10,8 @@ mod extract;
 mod outline_o2t;
 mod outline_t2o;
 mod svg;
+mod t1_from_sfnt;
+mod t1write;
 mod woff1;
 mod writer;
 
@@ -78,6 +80,8 @@ pub enum Target {
     Otc = 5,
     /// SVG font text (#192 gap 3): `format:svg` for single fonts.
     Svg = 6,
+    /// Type 1 (PFB) (#192 gap 4, stage 2): `format:type1` for sfnt sources.
+    Type1 = 7,
 }
 
 impl Target {
@@ -90,6 +94,7 @@ impl Target {
             4 => Some(Self::Ttc),
             5 => Some(Self::Otc),
             6 => Some(Self::Svg),
+            7 => Some(Self::Type1),
             _ => None,
         }
     }
@@ -369,6 +374,7 @@ pub fn convert(
                     Target::Otf => "otf",
                     Target::Woff => "woff",
                     Target::Woff2 => "woff2",
+                    Target::Type1 => "type1",
                     Target::Ttc => "ttc",
                     Target::Otc => "otc",
                     Target::Svg => "svg",
@@ -439,6 +445,7 @@ pub fn convert(
         // After the variable-font gate: svg renders the static (default)
         // instance, and a CFF2 variable font raised above like Ruby's.
         Target::Svg => svg::generate(&write_font(&tables, sfnt_version)),
+        Target::Type1 => t1_from_sfnt::otf_to_type1(&tables),
         Target::Woff => Ok(woff1::encode(&tables)),
         Target::Ttf | Target::Otf => {
             let want_glyf = target == Target::Ttf;

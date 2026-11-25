@@ -7,7 +7,7 @@
 
 use crate::convert::t1write::{encode_number, Pfb};
 use crate::convert::ConvertError;
-use crate::sfnt::tables::Tables;
+
 
 const HSBW_ESCAPE: u8 = 12;
 const HSBW_OP: u8 = 34;
@@ -102,14 +102,14 @@ fn parse_charstring(data: &[u8]) -> Vec<Op> {
         let b0 = data[i];
         i += 1;
         if b0 <= 31 && b0 != 28 {
-            let (name, op) = if b0 == 12 {
+            let name = if b0 == 12 {
                 let Some(&b1) = data.get(i) else { break };
                 i += 1;
                 // Escape operators are outside the converter's vocabulary;
                 // they carry no mask or stems.
-                (OpName::Other, (12, b1))
+                OpName::Other
             } else {
-                (name_of(u32::from(b0)), u32::from(b0))
+                name_of(u32::from(b0))
             };
             if matches!(name, OpName::Hstem | OpName::Vstem | OpName::Hstemhm | OpName::Vstemhm) {
                 stems += operands.len() / 2;
@@ -119,7 +119,6 @@ fn parse_charstring(data: &[u8]) -> Vec<Op> {
                 i += mask;
             }
             ops.push(Op { name, operands: std::mem::take(&mut operands) });
-            let _ = op;
         } else {
             let Some((value, consumed)) = read_number(&data[i.saturating_sub(1)..]) else {
                 break;
@@ -345,17 +344,14 @@ fn subr_op_code(name: OpName) -> u8 {
 
 /// The otf → type1 conversion: the PFB bytes for an OTF source, mirroring
 /// Ruby's `Type1Converter#convert_otf_to_type1` + `build_type1_data`.
-pub fn otf_to_type1(tables: &Tables) -> Result<Vec<u8>, ConvertError> {
-    let _ = (tables, Pfb {
+pub fn otf_to_type1(_tables: &[( [u8; 4], Vec<u8>)]) -> Result<Vec<u8>, ConvertError> {
+    let _ = Pfb {
         psname: "",
         version: "1.0",
         fontinfo: Vec::new(),
         bbox: [0; 4],
         private_entries: Vec::new(),
         charstrings: Vec::new(),
-    });
-    Err(ConvertError::new(
-        "Fontisan::Error",
-        "Conversion failed: Transformation failed: otf->type1 is not wired yet",
-    ))
+    };
+    Err(ConvertError::transform("otf->type1 is not wired yet"))
 }
