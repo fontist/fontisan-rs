@@ -91,10 +91,11 @@ fn corpus_pfa_is_unrecognised_exactly_like_ruby() {
 }
 
 #[test]
-fn dfont_is_parsed_and_type1_stays_unsupported() {
+fn dfont_is_parsed_and_type1_yields_its_sentinel() {
     let Some(corpus) = corpus() else { return };
     // dfont reads natively since #192 gap 5 (the resource fork reader);
-    // the PFB stays Unsupported, for the Ruby tier to serve.
+    // the PFB parses through the Type 1 sentinel since gap 4 (the ops map
+    // it to the measured surfaces; scan/audit_dir keep Type 1 with Ruby).
     let dfont = std::fs::read(font_path(&corpus, "TestDFONT.dfont")).unwrap();
     let font = Font::from_bytes(&dfont).expect("TestDFONT.dfont loaded");
     assert_eq!(font.format(), fontisan::sfnt::Format::Dfont);
@@ -102,5 +103,5 @@ fn dfont_is_parsed_and_type1_stays_unsupported() {
     let e = Font::from_bytes(&pfb)
         .err()
         .unwrap_or_else(|| panic!("TestT1-Regular.pfb loaded"));
-    assert_eq!(e.class, fontisan::sfnt::ErrorClass::Unsupported, "pfb");
+    assert_eq!(e.class, fontisan::sfnt::ErrorClass::Facade, "pfb");
 }
