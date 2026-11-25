@@ -1,28 +1,31 @@
+//! The engine's WOFF encode is NOT byte-identical to the Ruby tier's: its
+//! pure-Rust DEFLATE (zlib-rs) produces different streams than the libz the
+//! Ruby tier links, and the no-C rule bans linking libz. The gates therefore
+//! keep `convert to: :woff` with Ruby; this test pins the engine's own
+//! deterministic bytes so any encoder change is visible, and documents the
+//! divergence the day a byte-exact pure-Rust deflate exists.
+
+mod common;
+
+use common::corpus;
 use fontisan::convert::{SourceType, Target, convert};
 
 #[test]
-fn woff_encode_matches_the_ruby_tier() {
-    let Some(dir) = std::path::Path::new("../../fontisan-rs/.corpus/fontisan/corpus/fonts")
-        .exists()
-        .then(|| std::path::PathBuf::from("../../fontisan-rs/.corpus/fontisan/corpus/fonts"))
-    else {
+fn woff_encode_pins_the_engine_bytes() {
+    let Some(dir) = corpus() else {
         return;
     };
-    let input = std::fs::read(dir.join("TestTTF.ttf")).expect("corpus ttf");
+    let input = std::fs::read(dir.join("fonts").join("TestTTF.ttf")).expect("corpus ttf");
     let out = convert(&input, Target::Woff, SourceType::Ttc, 1_735_689_600).expect("converts");
-    println!(
-        "engine woff: {} bytes sha {:02x?}",
-        out.len(),
-        &sha(&out)[..8]
-    );
+    assert_eq!(out.len(), 1404);
     assert_eq!(
         sha(&out),
         [
-            0x8d, 0xf8, 0xce, 0xea, 0x2b, 0xa3, 0xea, 0xc1, 0x91, 0xa0, 0x61, 0x16, 0x22, 0xc5,
-            0x6c, 0x0a, 0xed, 0xe7, 0x53, 0xe1, 0x8a, 0x3d, 0x2a, 0x1d, 0x85, 0x0b, 0x6d, 0x56,
-            0x27, 0xe4, 0x93, 0x34,
+            0x26, 0x06, 0xa1, 0x2b, 0x83, 0xe0, 0x5c, 0xed, 0x42, 0x63, 0xcb, 0x7c, 0xeb, 0x08,
+            0x0d, 0x6e, 0x52, 0xca, 0xe2, 0x2c, 0x4b, 0x2f, 0xad, 0x4a, 0x8d, 0xdc, 0x61, 0x3c,
+            0xa5, 0xcf, 0x69, 0x00,
         ],
-        "engine woff bytes equal the ruby tier's"
+        "engine woff bytes (deterministic; the gate keeps the target with Ruby)"
     );
 }
 
