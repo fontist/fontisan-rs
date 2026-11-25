@@ -183,7 +183,9 @@ fn read_matches_goldens_through_the_abi() {
         }
     }
     eprintln!("abi read: {ok} faces equal, {errors} errors equal, {unsupported} unsupported");
-    assert!(ok >= 150 && unsupported >= 4, "{ok}/{unsupported}");
+    // Type 1 is served through its surface since #192 gap 4 — the errors
+    // compare against the goldens, so nothing reaches the unsupported count.
+    assert!(ok >= 150 && errors >= 4, "{ok} ok / {errors} errors");
 }
 
 #[test]

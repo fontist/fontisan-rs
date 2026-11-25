@@ -71,7 +71,8 @@ pub fn parse_pfb_ok_or_fail(input: &[u8]) -> Result<(), crate::convert::ConvertE
 
 /// The post-parse surface for the accessor the op touches first
 /// (`has_table?` for the read machinery, `table` for the glyph-id lookups,
-/// `table_data` for instancing and conversion).
+/// `table_data` for instancing and conversion). The raised NoMethodError is
+/// the malformed-font wrapper's cause, and the read goldens record it.
 pub fn op_error(accessor: &str) -> Error {
     Error::new(
         ErrorClass::InvalidFont,
@@ -102,15 +103,15 @@ pub fn parse_pfb(input: &[u8]) -> Result<(), Error> {
         if kind == EOF {
             return Ok(());
         }
-        let len = match input.get(at..at + 2) {
-            Some(b) => u16::from_le_bytes([b[0], b[1]]) as usize,
+        let len = match input.get(at..at + 4) {
+            Some(b) => u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize,
             None => {
                 return Err(facade(format!(
-                    "Invalid PFB: chunk {chunk} header truncated"
+                    "Invalid PFB: chunk {chunk} header truncated at offset {at}"
                 )));
             }
         };
-        at += 2;
+        at += 4;
         let kind_name = if kind == ASCII { "ASCII" } else { "binary" };
         let remaining = input.len().saturating_sub(at);
         if len > remaining {
@@ -141,9 +142,11 @@ mod tests {
 
     #[test]
     fn walk_accepts_segments_that_fit() {
-        let mut input = vec![0x80, BINARY, 4, 0, 1, 2, 3, 4];
-        input.extend_from_slice(&[0x80, ASCII, 2, 0, 5, 6]);
-        input.extend_from_slice(&[0x80, EOF, 0, 0]);
+        // PFB lengths are 4-byte little-endian.
+        let mut input = vec![0x80, BINARY, 4, 0, 0, 0, 1, 2, 3, 4];
+        input.extend_from_slice(&[0x80, ASCII, 2, 0, 0, 0, 5, 6]);
+        input.extend_from_slice(&[0x80, EOF, 0, 0, 0, 0]);
         assert!(parse_pfb(&input).is_ok());
     }
 }
+
