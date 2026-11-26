@@ -73,8 +73,7 @@ fn vf_to_type1_matches_the_ruby_golden() {
         return;
     };
     let goldens = fontisan.join("corpus").join("goldens");
-    let Some((want_sha, want_size)) =
-        golden_sha(&goldens, "mona-sans-vf-all-axes", "format:type1")
+    let Some((want_sha, want_size)) = golden_sha(&goldens, "mona-sans-vf-all-axes", "format:type1")
     else {
         return;
     };
