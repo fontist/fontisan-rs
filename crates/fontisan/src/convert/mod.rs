@@ -10,6 +10,7 @@ mod extract;
 mod outline_o2t;
 mod outline_t2o;
 mod svg;
+mod t1_from_glyf;
 mod t1_from_sfnt;
 mod t1write;
 mod woff1;
@@ -445,7 +446,13 @@ pub fn convert(
         // After the variable-font gate: svg renders the static (default)
         // instance, and a CFF2 variable font raised above like Ruby's.
         Target::Svg => svg::generate(&write_font(&tables, sfnt_version)),
-        Target::Type1 => t1_from_sfnt::otf_to_type1(&tables),
+        Target::Type1 => {
+            if has(&tables, b"glyf") {
+                t1_from_glyf::ttf_to_type1(&tables)
+            } else {
+                t1_from_sfnt::otf_to_type1(&tables)
+            }
+        }
         Target::Woff => Ok(woff1::encode(&tables)),
         Target::Ttf | Target::Otf => {
             let want_glyf = target == Target::Ttf;

@@ -132,6 +132,15 @@ pub(crate) struct Cff<'a> {
     /// None when Ruby's `charstring_for_glyph` returns nil (no Private DICT).
     pub local_subrs: Option<Vec<&'a [u8]>>,
     pub has_private: bool,
+    /// The Private DICT's own operands (BlueValues 6, StdHW 10, StdVW 11,
+    /// defaultWidthX 20, nominalWidthX 21) - the Type 1 reverse conversion
+    /// carries them into the PFB's Private dictionary.
+    pub private_ops: Vec<(u32, Vec<i64>)>,
+    /// The charset's SIDs per glyph (None when the charset is absent or
+    /// cannot be parsed); the Type 1 conversion names glyphs from it.
+    pub charset_sids: Option<Vec<Option<i64>>>,
+    /// The String INDEX's items (SID 391+ resolve here).
+    pub strings: Vec<&'a [u8]>,
 }
 
 pub(crate) fn parse(data: &[u8]) -> R<Cff<'_>> {
@@ -155,6 +164,9 @@ pub(crate) fn parse(data: &[u8]) -> R<Cff<'_>> {
         global_subrs: gsubrs.items,
         local_subrs: None,
         has_private: false,
+        private_ops: vec![],
+        charset_sids: None,
+        strings: strings.items,
     };
     let Some(cs) = get(&top, 17) else {
         return Ok(cff);
@@ -177,6 +189,7 @@ pub(crate) fn parse(data: &[u8]) -> R<Cff<'_>> {
     let pdata = &data[poff..(poff + size as usize).min(data.len())];
     let pd = dict(pdata)?;
     cff.has_private = true;
+    cff.private_ops = pd.clone();
     if let Some(s) = get(&pd, 19) {
         if s.len() != 1 {
             return Err("Failed to parse Local Subr INDEX".into());
@@ -185,5 +198,67 @@ pub(crate) fn parse(data: &[u8]) -> R<Cff<'_>> {
         let abs = usize::try_from(abs).map_err(|_| "negative seek".to_string())?;
         cff.local_subrs = Some(index(data, abs)?.items);
     }
+    // charset (op 15): the offset is absolute; 0/1/2 are the predefined
+    // charsets (ISOAdobe 0, Expert 1, ExpertSubset 2) - Ruby resolves their
+    // SIDs from the standard tables, but the Type 1 conversion only needs
+    // names for the custom-SID case, so predefined charsets resolve through
+    // the same ISOAdobe identity table (sid == gid) and expert ones yield
+    // None (no charset names).
+    if let Some(c) = get(&top, 15) {
+        if c.len() == 1 {
+            let coff = c[0];
+            if coff > 2 && (coff as usize) < data.len() {
+                cff.charset_sids = Some(parse_charset(data, coff as usize, cff.charstrings.len()));
+            }
+        }
+    }
     Ok(cff)
+}
+
+/// The SIDs of a charset (format 0 array, formats 1/2 ranges); gid 0 is
+/// always .notdef (SID 0). A truncated charset stops at what it has, and
+/// the caller's dangling-SID handling covers the rest.
+fn parse_charset(data: &[u8], at: usize, glyphs: usize) -> Vec<Option<i64>> {
+    let mut sids = vec![Some(0)];
+    let Some(&format) = data.get(at) else {
+        return sids;
+    };
+    let mut i = at + 1;
+    match format {
+        0 => {
+            while sids.len() < glyphs {
+                let Some(s) = data.get(i..i + 2) else { break };
+                i += 2;
+                sids.push(Some(i64::from(u16::from_be_bytes([s[0], s[1]]))));
+            }
+        }
+        1 | 2 => {
+            let side = if format == 1 { 1 } else { 2 };
+            while sids.len() < glyphs {
+                let Some(first) = data.get(i..i + 2) else {
+                    break;
+                };
+                i += 2;
+                let Some(n) = data.get(i..i + side) else {
+                    break;
+                };
+                i += side;
+                let first = i64::from(u16::from_be_bytes([first[0], first[1]]));
+                let count = if side == 1 {
+                    usize::from(n[0])
+                } else {
+                    usize::from(u16::from_be_bytes([n[0], n[1]]))
+                };
+                for k in 0..=count {
+                    if sids.len() >= glyphs {
+                        break;
+                    }
+                    sids.push(Some(first + k as i64));
+                }
+            }
+        }
+        _ => {}
+    }
+    sids.resize(glyphs, None);
+    sids
 }
