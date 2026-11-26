@@ -1,7 +1,6 @@
 //! The CFF standard strings (SID 0-390; Adobe TN 5176 Appendix A), the
 //! same list the Ruby tier's `StandardStrings::LIST` carries.
 
-#[allow(dead_code)] // the charset-name resolver indexes it directly
 pub const STANDARD: [&str; 391] = [
     ".notdef",
     "space",
@@ -395,9 +394,3 @@ pub const STANDARD: [&str; 391] = [
     "uni2083",
     "uni2084",
 ];
-
-/// `string_for_sid`: the standard table for SIDs 0-390, else the
-/// font's String INDEX at sid-391 (Ruby's `Cff#string_for_sid`).
-pub fn standard_string(sid: usize) -> Option<&'static str> {
-    STANDARD.get(sid).copied()
-}
