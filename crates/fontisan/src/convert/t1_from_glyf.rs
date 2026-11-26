@@ -587,16 +587,3 @@ pub fn ttf_to_type1(tables: &[([u8; 4], Vec<u8>)]) -> Result<Vec<u8>, ConvertErr
     };
     pfb.write()
 }
-
-/// Ruby's `PFBGenerator::WEIGHT_NAMES`.
-const WEIGHT_NAMES: [&str; 9] = [
-    "Thin",
-    "ExtraLight",
-    "Light",
-    "Regular",
-    "Medium",
-    "SemiBold",
-    "Bold",
-    "ExtraBold",
-    "Black",
-];
