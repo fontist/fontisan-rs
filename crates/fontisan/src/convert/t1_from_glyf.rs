@@ -139,19 +139,16 @@ fn parse_components(data: &[u8]) -> Option<Vec<Component>> {
         let mut scale_01 = 0.0;
         let mut scale_10 = 0.0;
         if flags & 0x0080 != 0 {
-            // WE_HAVE_A_TWO_BY_TWO: xs, s01, s10, ys (F2Dot14)
             scale_x = f2dot14(u16_at(data, i)?);
             scale_01 = f2dot14(u16_at(data, i + 2)?);
             scale_10 = f2dot14(u16_at(data, i + 4)?);
             scale_y = f2dot14(u16_at(data, i + 6)?);
             i += 8;
         } else if flags & 0x0040 != 0 {
-            // WE_HAVE_AN_X_AND_Y_SCALE
             scale_x = f2dot14(u16_at(data, i)?);
             scale_y = f2dot14(u16_at(data, i + 2)?);
             i += 4;
         } else if flags & 0x0008 != 0 {
-            // WE_HAVE_A_SCALE
             scale_x = f2dot14(u16_at(data, i)?);
             scale_y = scale_x;
             i += 2;
@@ -173,9 +170,8 @@ fn parse_components(data: &[u8]) -> Option<Vec<Component>> {
     Some(comps)
 }
 
-/// Ruby's `SimpleGlyph#points_for_contour` for every contour, flattened
-/// (x, y, on-curve).
-fn simple_points(data: &[u8]) -> Option<Vec<(i64, i64, bool)>> {
+/// Ruby's `SimpleGlyph#points_for_contour` per contour (x, y, on-curve).
+fn simple_points(data: &[u8]) -> Option<Vec<Vec<(i64, i64, bool)>>> {
     let num_contours = i16_at(data, 0)?;
     if num_contours < 0 {
         return None;
@@ -186,6 +182,7 @@ fn simple_points(data: &[u8]) -> Option<Vec<(i64, i64, bool)>> {
         ends.push(usize::from(u16_at(data, 10 + 2 * c)?));
     }
     let num_points = ends.last().copied().unwrap_or(0) + 1;
+    let mut start = 0usize;
     let instr_len = usize::from(u16_at(data, 10 + 2 * nc)?);
     let mut i = 10 + 2 * nc + 2 + instr_len;
 
@@ -234,9 +231,16 @@ fn simple_points(data: &[u8]) -> Option<Vec<(i64, i64, bool)>> {
         }
         ys.push(y);
     }
+    let all: Vec<(i64, i64, bool)> = (0..num_points)
+        .map(|p| (xs[p], ys[p], flags[p] & 0x01 != 0))
+        .collect();
     Some(
-        (0..num_points)
-            .map(|p| (xs[p], ys[p], flags[p] & 0x01 != 0))
+        ends.iter()
+            .map(|end| {
+                let slice = all[start..=*end].to_vec();
+                start = end + 1;
+                slice
+            })
             .collect(),
     )
 }
@@ -357,13 +361,10 @@ pub fn ttf_to_type1(tables: &[([u8; 4], Vec<u8>)]) -> Result<Vec<u8>, ConvertErr
             .and_then(|n| n.english_name(1))
             .unwrap_or_else(|| psname.clone())
     ));
-    let weight_class = os2.as_ref().map_or(0, |o| o.us_weight_class);
-    let weight = if weight_class == 0 {
-        "Regular".to_string()
-    } else {
-        WEIGHT_NAMES[((weight_class / 100).clamp(1, 9) - 1) as usize].to_string()
-    };
-    fontinfo.push(format!("/Weight ({weight}) def"));
+    // Ruby's weight guard checks respond_to?(:weight_class) on the raw
+    // BinData OS/2 record, which has only us_weight_class - the guard never
+    // passes, so the PFB always names Regular.
+    fontinfo.push("/Weight (Regular) def".to_string());
     let italic_angle = post
         .as_ref()
         .map_or(0.0, |p| f64::from(p.italic_angle_raw) / 65536.0);
@@ -395,19 +396,20 @@ pub fn ttf_to_type1(tables: &[([u8; 4], Vec<u8>)]) -> Result<Vec<u8>, ConvertErr
 
     // private_entries: BlueValues/password/MinFeature, then the OS/2 stem
     // guesses and ForceBold.
+    let us_weight_class = os2.as_ref().map_or(0, |o| o.us_weight_class);
     let mut private_entries: Vec<(&str, String)> = vec![
         ("BlueValues", "[0 0]".to_string()),
         ("password", "5839".to_string()),
         ("MinFeature", "{16 16}".to_string()),
     ];
-    if weight_class != 0 {
+    if us_weight_class != 0 {
         // Ruby: [100, 80, 90][weight_class / 100] || 80 - an index past the
         // end (weight classes 300-900) falls back to 80.
-        let idx = (weight_class / 100) as usize;
+        let idx = (us_weight_class / 100) as usize;
         let stem = sc(if idx <= 2 { [100, 80, 90][idx] } else { 80 });
         private_entries.push(("StdHW", stem.to_string()));
         private_entries.push(("StdVW", stem.to_string()));
-        private_entries.push(("ForceBold", (weight_class >= 700).to_string()));
+        private_entries.push(("ForceBold", (us_weight_class >= 700).to_string()));
     }
 
     // hmtx metrics: numberOfHMetrics × (advance, lsb), then the last advance
@@ -476,9 +478,12 @@ pub fn ttf_to_type1(tables: &[([u8; 4], Vec<u8>)]) -> Result<Vec<u8>, ConvertErr
         };
 
         let plain = if num_contours < 0 {
-            // Ruby's convert_composite_glyph: per xy-positioned simple
-            // component, per contour: RMOVETO + RLINETO runs, UNSCALED, with
-            // a truncating transform, no hsbw and no endchar.
+            // Ruby's convert_composite_glyph dereferences @loca_table /
+            // @head_table, which TTFToType1Converter#initialize never
+            // assigns - so Glyf#glyph_for survives only on its cache, which
+            // holds every gid the convert loop has already processed. A
+            // component whose gid is still uncached raises into the method's
+            // rescue and the whole glyph converts to the empty charstring.
             let mut commands: Vec<Vec<i64>> = Vec::new();
             let mut ok = true;
             match parse_components(slice) {
@@ -488,14 +493,22 @@ pub fn ttf_to_type1(tables: &[([u8; 4], Vec<u8>)]) -> Result<Vec<u8>, ConvertErr
                             continue;
                         }
                         let cgid = usize::from(component.glyph_index);
+                        if cgid >= gid {
+                            // Uncached: Ruby's glyph_for raises here.
+                            ok = false;
+                            break;
+                        }
                         let (Some(cs), Some(ce)) = (loca_at(cgid), loca_at(cgid + 1)) else {
-                            continue;
+                            ok = false;
+                            break;
                         };
                         let Some(comp_slice) = (ce > cs).then(|| glyf.get(cs..ce)).flatten() else {
+                            // Empty component: glyph_for cached nil - skipped.
                             continue;
                         };
                         let Some(ncc) = i16_at(comp_slice, 0) else {
-                            continue;
+                            ok = false;
+                            break;
                         };
                         if ncc < 0 {
                             continue; // not simple - Ruby skips it
@@ -503,24 +516,30 @@ pub fn ttf_to_type1(tables: &[([u8; 4], Vec<u8>)]) -> Result<Vec<u8>, ConvertErr
                         let m = component.matrix();
                         let tx = |x: f64, y: f64| -> i64 { (m[0] * x + m[2] * y + m[4]) as i64 };
                         let ty = |x: f64, y: f64| -> i64 { (m[1] * x + m[3] * y + m[5]) as i64 };
-                        let Some(points) = simple_points(comp_slice) else {
+                        let Some(contours) = simple_points(comp_slice) else {
                             ok = false;
                             break;
                         };
-                        if points.is_empty() {
-                            continue;
-                        }
-                        let (x0, y0, _) = points[0];
-                        let (fx, fy) = (tx(x0 as f64, y0 as f64), ty(x0 as f64, y0 as f64));
-                        commands.push(vec![21, fx, fy]);
-                        let (mut px, mut py) = (x0 as f64, y0 as f64);
-                        for (x, y, _) in &points[1..] {
-                            let (x, y) = (*x as f64, *y as f64);
-                            let dx = tx(x, y) - tx(px, py);
-                            let dy = ty(x, y) - ty(px, py);
-                            commands.push(vec![5, dx, dy]);
-                            px = x;
-                            py = y;
+                        // Ruby's transform_simple_glyph_commands: per
+                        // contour, RMOVETO the transformed first point then
+                        // RLINETO transformed deltas - every point, on- or
+                        // off-curve, no closing line.
+                        for contour in &contours {
+                            if contour.is_empty() {
+                                continue;
+                            }
+                            let (x0, y0, _) = contour[0];
+                            let (fx, fy) = (tx(x0 as f64, y0 as f64), ty(x0 as f64, y0 as f64));
+                            commands.push(vec![21, fx, fy]);
+                            let (mut px, mut py) = (x0 as f64, y0 as f64);
+                            for (x, y, _) in &contour[1..] {
+                                let (x, y) = (*x as f64, *y as f64);
+                                let dx = tx(x, y) - tx(px, py);
+                                let dy = ty(x, y) - ty(px, py);
+                                commands.push(vec![5, dx, dy]);
+                                px = x;
+                                py = y;
+                            }
                         }
                     }
                 }
@@ -534,10 +553,11 @@ pub fn ttf_to_type1(tables: &[([u8; 4], Vec<u8>)]) -> Result<Vec<u8>, ConvertErr
         } else {
             // simple glyph: hsbw(scale(lsb), scale(width)) + the contour walk
             // + endchar, scaled, through encode_charstring.
-            let Some(mut points) = simple_points(slice) else {
+            let Some(contours) = simple_points(slice) else {
                 charstrings.push((name, empty));
                 continue;
             };
+            let mut points: Vec<(i64, i64, bool)> = contours.iter().flatten().copied().collect();
             for p in &mut points {
                 *p = (sc(p.0), sc(p.1), p.2);
             }

@@ -68,6 +68,33 @@ fn otf_to_type1_matches_the_ruby_golden() {
 }
 
 #[test]
+fn vf_to_type1_matches_the_ruby_golden() {
+    let Some(fontisan) = fontisan_root() else {
+        return;
+    };
+    let goldens = fontisan.join("corpus").join("goldens");
+    let Some((want_sha, want_size)) =
+        golden_sha(&goldens, "mona-sans-vf-all-axes", "format:type1")
+    else {
+        return;
+    };
+    let input = corpus_font(
+        &fontisan,
+        "mona-sans-vf-all-axes",
+        "MonaSansVF[wdth,wght,opsz,ital].ttf",
+    );
+    let out = fontisan::convert::convert(
+        &input,
+        fontisan::convert::Target::Type1,
+        fontisan::convert::SourceType::Ttc,
+        1_735_689_600,
+    )
+    .expect("converts");
+    assert_eq!(out.len(), want_size, "size");
+    assert_eq!(sha(&out), want_sha, "vf→type1 bytes vs the ruby golden");
+}
+
+#[test]
 fn ttf_to_type1_matches_the_ruby_golden() {
     let Some(fontisan) = fontisan_root() else {
         return;
