@@ -9,7 +9,8 @@ mod font;
 mod layout;
 mod outlines;
 mod standard_names;
-mod tables;
+pub(crate) mod standard_strings;
+pub(crate) mod tables;
 mod variations;
 pub(crate) mod woff2_view;
 
